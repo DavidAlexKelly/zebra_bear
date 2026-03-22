@@ -1,0 +1,137 @@
+PROJECT ZEBRA-BEAR
+==================
+A Danganronpa-inspired narrative adventure game built in MonoGame (C#)
+
+
+OVERVIEW
+--------
+Project Zebra-Bear is an indie narrative game built from scratch in MonoGame,
+a pure-code C# game framework with no editor or GUI tooling. The game is
+inspired by the visual style and tone of Danganronpa 2: Goodbye Despair —
+a Japanese murder mystery visual novel in which a group of students are
+trapped on a tropical island and forced to participate in a killing game
+orchestrated by a sadistic bear mascot.
+
+The project explores how to recreate the distinctive Danganronpa aesthetic
+— flat 2D character cutouts inhabiting a stylised 3D world — using a
+hand-rolled engine with no asset store plugins or pre-built systems.
+
+
+VISUAL APPROACH
+---------------
+Danganronpa's signature look is achieved through a technique sometimes called
+2.5D or billboard rendering. Characters are flat 2D sprites (or in this
+project, coloured billboard quads) that always face the camera, while the
+environment is genuine 3D geometry — box rooms, wall-mounted objects, and
+freestanding furniture built from coloured vertex quads.
+
+This approach gives the game its distinctive "paper cutout in a real space"
+feeling without requiring complex 3D character rigs or animations. The
+technique also makes it straightforward to swap placeholder geometry for
+hand-drawn character art later in development.
+
+
+CORE SYSTEMS BUILT SO FAR
+--------------------------
+- First-person 3D camera with WASD movement, mouse look (yaw + pitch),
+  sprint (Shift), and room boundary clamping
+
+- Procedural room geometry (Room3D) with configurable wall, floor and
+  ceiling colours — allowing multiple rooms to have distinct atmospheres
+
+- Billboard character system — flat quads that rotate to face the camera,
+  with depth-sorted rendering and raycasting for interaction
+
+- Wall-mounted object system (WorldObject3D) — 3D box geometry flush
+  against walls, with configurable facing direction and protrusion depth.
+  Used for doors, notice boards, and similar environmental details
+
+- Freestanding furniture system (Furniture3D) — full 3D box geometry with
+  four legs, fake face shading (top/side/bottom brightness variation), and
+  raycasting interaction
+
+- Dialogue system (DialogueBox) — Danganronpa-style dialogue panel with:
+    - Red accent bar and character name tag
+    - Typewriter text effect with skip-on-click
+    - Advance indicator (pulsing >>)
+    - Yes/No choice system with keyboard and mouse navigation
+    - Callback system (OnChoice) for branching outcomes
+
+- Scene management — MainMenu, Game, Room2, and Paused states with clean
+  transitions and mouse capture handling
+
+- Pause menu — overlay on the live game scene with Resume, Main Menu,
+  and Quit options
+
+- Multi-room navigation — interacting with the door triggers a choice
+  dialogue; selecting Yes transitions the player to a second room
+
+
+TECH STACK
+----------
+Language:       C# (.NET 8)
+Framework:      MonoGame 3.8 (DesktopGL / OpenGL)
+Rendering:      BasicEffect (vertex colour, no textures yet)
+Content:        MonoGame Content Pipeline (MGCB) for SpriteFont compilation
+Platform:       macOS (cross-platform — Windows and Linux supported)
+IDE:            Any — project is pure CLI (dotnet run)
+
+
+DIRECTORY STRUCTURE
+-------------------
+project-zebra-bear/
+  Content/
+    Fonts/
+      MenuFont.spritefont       — 22pt Arial, ASCII range
+      TitleFont.spritefont      — 48pt Arial, ASCII range
+  Camera.cs                     — FPS camera (position, yaw, pitch, movement)
+  Room3D.cs                     — Procedural room geometry
+  WorldObject3D.cs              — Wall-mounted 3D interactive objects
+  Furniture3D.cs                — Freestanding 3D furniture
+  Billboard.cs                  — Camera-facing character sprites
+  DialogueBox.cs                — Dialogue + choice UI system
+  GameScene.cs                  — Main game room (Room 1)
+  Room2Scene.cs                 — Second room (currently empty)
+  MainMenuScene.cs              — Title screen
+  PauseMenu.cs                  — Pause overlay
+  Game.cs                       — Entry point, scene router
+  Program.cs                    — Application entry
+
+
+IMMEDIATE NEXT STEPS
+--------------------
+- Load real PNG character sprites onto billboard quads (Texture2D)
+- Load pre-rendered background textures onto room walls
+- Add an inventory / evidence system (Truth Bullets)
+- Build the Class Trial scene (separate 3D courtroom space)
+- Add ambient audio and per-dialogue voice clips
+- Expand Room 2 with characters, objects and a narrative purpose
+- Implement a save/load system
+
+
+LONGER TERM AIMS
+----------------
+The project aims to deliver a short-form narrative experience in the
+Danganronpa mould — a contained cast of characters, a mystery to unravel
+across multiple rooms and chapters, and a climactic Class Trial where the
+player must present evidence and argue their case.
+
+The game is intended as both a playable demo and a technical proof of
+concept — demonstrating that a stylistically ambitious narrative game
+can be built from near-scratch in MonoGame without a visual editor,
+relying entirely on code-driven geometry, a hand-written dialogue engine,
+and pre-rendered or hand-drawn 2D art assets.
+
+
+RUNNING THE PROJECT
+-------------------
+Prerequisites:  .NET 8 SDK, MonoGame templates installed
+Build content:  dotnet mgcb Content/Content.mgcb
+Run:            dotnet run
+
+Controls:
+  WASD          Move
+  Mouse         Look
+  Shift         Sprint
+  E / Click     Interact
+  Escape        Pause menu
