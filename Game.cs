@@ -9,25 +9,21 @@ namespace ZebraBear;
 
 /// <summary>
 /// Application entry point and scene router.
-///
-/// Scenes are now fully data-driven: any room in map.json is automatically
-/// available as a navigation target. Adding a new room requires:
-///   1. An entry in Data/map.json  (id, label, position, size, sceneType)
-///   2. An entry in Data/rooms.json (id, colours, entities)
-///   3. Zero C# changes here.
-///
-/// Special-case scenes (MainMenu, PauseMenu) are still constructed directly.
+/// Implements IGameHost so that scenes can call back into the host without
+/// depending on the concrete ZebraBear.Game type (which shadows
+/// Microsoft.Xna.Framework.Game and causes CS1061 in some compiler versions).
 /// </summary>
-public class Game : Microsoft.Xna.Framework.Game
+public class Game : Microsoft.Xna.Framework.Game, IGameHost
 {
-    private GraphicsDeviceManager _graphics;
-    private SpriteBatch           _spriteBatch;
+    private GraphicsDeviceManager    _graphics;
+    private SpriteBatch              _spriteBatch;
 
-    private SceneManager  _scenes;
-    private PauseMenu     _pauseMenu;
-    private MainMenuScene _mainMenuScene;
+    private SceneManager             _scenes;
+    private PauseMenu                _pauseMenu;
+    private MainMenuScene            _mainMenuScene;
+    private LevelEditorScene         _levelEditorScene;
+    private RoomGeometryEditorScene  _roomGeoEditorScene;
 
-    // Room scenes are created on demand and cached by room id.
     private readonly Dictionary<string, IScene> _roomScenes = new();
 
     private KeyboardState _prevKeys;
@@ -46,21 +42,14 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
-        // Give entity builders access to the content pipeline (needed for fbx type)
         ZebraBearEntities.Content = Content;
-
-        // Register all entity types used by this game
         ZebraBearEntities.Register();
-
-        // Export all MeshBuilder shapes to Data/Models/ as OBJ files.
-        // Safe to leave on permanently — skips files that already exist.
         ModelExporter.ExportAll();
 
         Assets.Load(Content, GraphicsDevice);
         GameLoader.LoadCharacters(Content);
         GameLoader.LoadMap();
 
-        // Build room scenes from map data — no hard-coded room list
         foreach (var mapRoom in MapData.Rooms)
         {
             var sceneType = mapRoom.SceneType == "plus"
@@ -75,6 +64,12 @@ public class Game : Microsoft.Xna.Framework.Game
         _mainMenuScene = new MainMenuScene(this, _spriteBatch);
         _mainMenuScene.Load();
 
+        _roomGeoEditorScene = new RoomGeometryEditorScene(this, _spriteBatch);
+        _roomGeoEditorScene.Load();
+
+        _levelEditorScene = new LevelEditorScene(this, _spriteBatch, _roomGeoEditorScene);
+        _levelEditorScene.Load();
+
         _pauseMenu = new PauseMenu(this, _spriteBatch);
         _pauseMenu.Load();
 
@@ -87,7 +82,6 @@ public class Game : Microsoft.Xna.Framework.Game
         var keys = Keyboard.GetState();
 
         bool inGame = _scenes.Current is RoomScene;
-
         if (inGame && keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape))
             _scenes.Pause();
 
@@ -102,10 +96,11 @@ public class Game : Microsoft.Xna.Framework.Game
 
     private void HandleNavigation(string destination)
     {
-        if (destination == "MainMenu")
+        switch (destination)
         {
-            _scenes.ChangeTo(_mainMenuScene);
-            return;
+            case "MainMenu":    _scenes.ChangeTo(_mainMenuScene);    return;
+            case "LevelEditor": _scenes.ChangeTo(_levelEditorScene); return;
+            case "RoomGeoEditor": _scenes.ChangeTo(_roomGeoEditorScene); return;
         }
 
         if (_roomScenes.TryGetValue(destination, out var scene))
@@ -114,8 +109,7 @@ public class Game : Microsoft.Xna.Framework.Game
             return;
         }
 
-        System.Console.WriteLine($"[Game] Unknown destination: '{destination}'. " +
-            $"Add it to map.json and rooms.json.");
+        System.Console.WriteLine($"[Game] Unknown destination: '{destination}'.");
     }
 
     protected override void Draw(GameTime gameTime)
@@ -128,10 +122,13 @@ public class Game : Microsoft.Xna.Framework.Game
     }
 
     // -----------------------------------------------------------------------
-    // Navigation API  (kept for code that calls these directly, e.g. PauseMenu)
+    // IGameHost implementation
     // -----------------------------------------------------------------------
 
-    public void GoToMainMenu() => _scenes.ChangeTo(_mainMenuScene);
     public void Resume()       => _scenes.Resume();
-    public void Pause()        => _scenes.Pause();
+    public void GoToMainMenu() => _scenes.ChangeTo(_mainMenuScene);
+
+    // Exit() is already defined on Microsoft.Xna.Framework.Game — no override needed.
+    // The interface re-exposes it so callers typed as IGameHost can call it.
+    void IGameHost.Exit() => base.Exit();
 }

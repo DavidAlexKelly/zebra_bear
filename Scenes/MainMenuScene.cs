@@ -11,7 +11,8 @@ public class MainMenuScene : IScene
     private readonly SpriteBatch _spriteBatch;
 
     private int      _selectedIndex = 0;
-    private string[] _options       = { "New Game", "Load", "Quit" };
+    // Editor is index 2; Quit is index 3
+    private string[] _options       = { "New Game", "Load", "Editor", "Quit" };
 
     private KeyboardState _prevKeys;
 
@@ -61,7 +62,8 @@ public class MainMenuScene : IScene
             {
                 case 0: NavigationBus.RequestNavigate(MapData.CurrentRoomId); break;
                 case 1: /* load logic */ break;
-                case 2: _game.Exit();    break;
+                case 2: NavigationBus.RequestNavigate("LevelEditor");         break;
+                case 3: _game.Exit();                                         break;
             }
         }
 
@@ -86,6 +88,16 @@ public class MainMenuScene : IScene
             bool selected = i == _selectedIndex;
             var  color    = selected ? Color.White : new Color(120, 120, 140);
             var  text     = selected ? $"> {_options[i]} <" : _options[i];
+
+            // Draw a small dim separator line above "Editor" to group it visually
+            if (i == 2)
+            {
+                float sepY = 280f + i * 60f - 12f;
+                _spriteBatch.Draw(Assets.Pixel,
+                    new Rectangle((int)(cx - 100), (int)sepY, 200, 1),
+                    new Color(50, 45, 75));
+            }
+
             var  size     = Assets.MenuFont.MeasureString(text);
             var  pos      = new Vector2(cx - size.X / 2f, 280f + i * 60f);
 
@@ -96,7 +108,12 @@ public class MainMenuScene : IScene
                     new Color(232, 0, 61, 40));
             }
 
-            _spriteBatch.DrawString(Assets.MenuFont, text, pos, color * _alpha);
+            // "Editor" gets a subtle tint to distinguish it from game options
+            var drawColor = (i == 2 && !selected)
+                ? new Color(100, 120, 180)
+                : color;
+
+            _spriteBatch.DrawString(Assets.MenuFont, text, pos, drawColor * _alpha);
         }
 
         _spriteBatch.DrawString(Assets.MenuFont, "v0.1",

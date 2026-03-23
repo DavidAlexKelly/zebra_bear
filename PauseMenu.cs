@@ -9,7 +9,9 @@ namespace ZebraBear;
 
 public class PauseMenu : IScene
 {
-    private readonly Game        _game;
+    // Change from 'Game' to 'IGameHost' so the compiler resolves
+    // Resume() and GoToMainMenu() unambiguously.
+    private readonly IGameHost   _game;
     private readonly SpriteBatch _spriteBatch;
 
     // -----------------------------------------------------------------------
@@ -54,7 +56,8 @@ public class PauseMenu : IScene
     private Color _tabBg   = new Color(14, 12, 28);
     private Color _border  = new Color(40, 38, 68);
 
-    public PauseMenu(Game game, SpriteBatch spriteBatch)
+    // Change constructor parameter from 'Game' to 'IGameHost'
+    public PauseMenu(IGameHost game, SpriteBatch spriteBatch)
     {
         _game        = game;
         _spriteBatch = spriteBatch;
@@ -98,7 +101,6 @@ public class PauseMenu : IScene
             _game.Resume();
         }
 
-        // Tab switching — Q cycles left, E cycles right, Tab also cycles
         if (IsPressed(keys, _prevKeys, Keys.Q) ||
             IsPressed(keys, _prevKeys, Keys.Tab))
             CycleTab(-1);
@@ -229,12 +231,11 @@ public class PauseMenu : IScene
             DrawRect(new Rectangle(tabX, tabY, TabW, TabH),
                 active ? new Color(10, 10, 24) : _tabBg);
 
-            // Active = accent top stripe, inactive = border
             DrawRect(new Rectangle(tabX, tabY, TabW, active ? 3 : 1),
                 active ? _accent : _border);
 
-            var  label   = _tabNames[i];
-            var  sz      = Assets.MenuFont.MeasureString(label);
+            var  label = _tabNames[i];
+            var  sz    = Assets.MenuFont.MeasureString(label);
             _spriteBatch.DrawString(Assets.MenuFont, label,
                 new Vector2(tabX + TabW / 2f - sz.X / 2f,
                             tabY + TabH / 2f - sz.Y / 2f),
@@ -253,20 +254,14 @@ public class PauseMenu : IScene
         for (int i = 0; i < _options.Length; i++)
         {
             bool selected = i == _selectedIndex;
-            var  color    = selected ? Color.White : new Color(130, 125, 160);
-            var  text     = _options[i];
+            var  color    = selected ? Color.White : new Color(120, 120, 140);
+            var  text     = selected ? $"> {_options[i]} <" : _options[i];
             var  size     = Assets.MenuFont.MeasureString(text);
-            var  pos      = new Vector2(cx - size.X / 2f, y + 60f + i * 80f);
+            var  pos      = new Vector2(cx - size.X / 2f, y + 40 + i * 60f);
 
             if (selected)
-            {
-                DrawRect(new Rectangle(x + 40, (int)pos.Y - 12, w - 80, (int)size.Y + 24),
-                    new Color(232, 0, 61, 35));
-                DrawRect(new Rectangle(x + 40, (int)pos.Y - 12, 3, (int)size.Y + 24),
-                    _accent);
-                _spriteBatch.DrawString(Assets.MenuFont, ">",
-                    new Vector2(x + 52, pos.Y), _accent);
-            }
+                DrawRect(new Rectangle((int)(cx - 160), (int)pos.Y - 6, 320, 44),
+                    new Color(232, 0, 61, 40));
 
             _spriteBatch.DrawString(Assets.MenuFont, text, pos, color);
         }
@@ -278,31 +273,24 @@ public class PauseMenu : IScene
 
     private void DrawMapTab(int x, int y, int w, int h)
     {
-        const int mapPad = 30;
-        int mapX = x + mapPad;
-        int mapY = y + mapPad;
-        int mapW = w - mapPad * 2;
-        int mapH = h - mapPad * 2 - 24; // leave room for legend
+        int mapX = x + 20;
+        int mapY = y + 20;
+        int mapW = w - 40;
+        int mapH = h - 40;
 
-        // Canvas
-        DrawRect(new Rectangle(mapX, mapY, mapW, mapH), new Color(6, 6, 16));
-        DrawRect(new Rectangle(mapX,          mapY,          mapW, 1), _border);
-        DrawRect(new Rectangle(mapX,          mapY + mapH,   mapW, 1), _border);
-        DrawRect(new Rectangle(mapX,          mapY,          1, mapH), _border);
-        DrawRect(new Rectangle(mapX + mapW,   mapY,          1, mapH), _border);
+        DrawRect(new Rectangle(mapX, mapY, mapW, mapH), new Color(8, 8, 18));
 
-        // Connections (behind rooms)
+        // Connections
         foreach (var conn in MapData.Connections)
         {
-            var from = MapData.Rooms.Find(r => r.Id == conn.FromId);
-            var to   = MapData.Rooms.Find(r => r.Id == conn.ToId);
-            if (from == null || to == null) continue;
-            if (!from.Discovered && !to.Discovered) continue;
+            var fromRoom = MapData.Rooms.Find(r => r.Id == conn.FromId);
+            var toRoom   = MapData.Rooms.Find(r => r.Id == conn.ToId);
+            if (fromRoom == null || toRoom == null) continue;
 
-            DrawLine(
-                RoomCentre(from, mapX, mapY, mapW, mapH),
-                RoomCentre(to,   mapX, mapY, mapW, mapH),
-                to.Discovered ? new Color(55, 50, 85) : new Color(30, 28, 50));
+            var from = RoomCentre(fromRoom, mapX, mapY, mapW, mapH);
+            var to   = RoomCentre(toRoom,   mapX, mapY, mapW, mapH);
+            DrawLine(from, to, fromRoom.Discovered && toRoom.Discovered
+                ? new Color(55, 50, 85) : new Color(30, 28, 50));
         }
 
         // Rooms
@@ -328,7 +316,6 @@ public class PauseMenu : IScene
             DrawCentredString(room.Label, rX, rY, rW, rH,
                 isCurrent ? Color.White : new Color(160, 155, 190));
 
-            // Pulsing location dot
             if (isCurrent)
             {
                 float pulse  = (float)Math.Sin(_mapPulse) * 0.5f + 0.5f;
@@ -341,7 +328,6 @@ public class PauseMenu : IScene
             }
         }
 
-        // Legend
         int legendY = mapY + mapH + 8;
         DrawRect(new Rectangle(mapX, legendY + 4, 8, 8), _accent);
         _spriteBatch.DrawString(Assets.MenuFont, "  Current location",
@@ -359,7 +345,6 @@ public class PauseMenu : IScene
         const int EntryH    = 64;
         const int ThumbSize = 48;
 
-        // ---- Left panel: character list ----
         int listX = x + Pad;
         int listY = y + Pad;
 
@@ -369,17 +354,13 @@ public class PauseMenu : IScene
             bool selected = i == _charSelectedIndex;
             int  entryY   = listY + i * (EntryH + 4);
 
-            // Entry background
             var entryBg = selected ? new Color(28, 14, 32) : new Color(14, 13, 26);
             DrawRect(new Rectangle(listX, entryY, ListW, EntryH), entryBg);
-
-            // Left accent on selected
             DrawRect(new Rectangle(listX, entryY, selected ? 3 : 1, EntryH),
                 selected ? _accent : _border);
 
             if (!c.Met)
             {
-                // Unknown — show ??? placeholder
                 DrawRect(new Rectangle(listX + 8, entryY + 8, ThumbSize, ThumbSize),
                     new Color(20, 18, 35));
                 var qSz = Assets.MenuFont.MeasureString("?");
@@ -387,7 +368,6 @@ public class PauseMenu : IScene
                     new Vector2(listX + 8 + ThumbSize / 2f - qSz.X / 2f,
                                 entryY + 8 + ThumbSize / 2f - qSz.Y / 2f),
                     new Color(50, 45, 75));
-
                 _spriteBatch.DrawString(Assets.MenuFont, "???",
                     new Vector2(listX + ThumbSize + 16, entryY + 12),
                     new Color(60, 55, 85));
@@ -397,33 +377,26 @@ public class PauseMenu : IScene
             }
             else
             {
-                // Thumbnail portrait
                 if (c.Portrait != null)
-                {
-                    var dest = new Rectangle(listX + 8, entryY + 8, ThumbSize, ThumbSize);
-                    _spriteBatch.Draw(c.Portrait, dest, Color.White);
-                }
+                    _spriteBatch.Draw(c.Portrait,
+                        new Rectangle(listX + 8, entryY + 8, ThumbSize, ThumbSize),
+                        Color.White);
                 else
-                {
                     DrawRect(new Rectangle(listX + 8, entryY + 8, ThumbSize, ThumbSize),
                         new Color(40, 35, 60));
-                }
 
                 _spriteBatch.DrawString(Assets.MenuFont, c.Name,
                     new Vector2(listX + ThumbSize + 16, entryY + 10),
                     selected ? Color.White : new Color(160, 155, 190));
-
                 _spriteBatch.DrawString(Assets.MenuFont, c.Title,
                     new Vector2(listX + ThumbSize + 16, entryY + 34),
                     new Color(130, 80, 100));
             }
         }
 
-        // ---- Divider ----
         int divX = x + ListW + Pad * 2;
         DrawRect(new Rectangle(divX, y + Pad, 1, h - Pad * 2), _border);
 
-        // ---- Right panel: detail view ----
         int detailX = divX + Pad;
         int detailY = y + Pad;
         int detailW = w - ListW - Pad * 4 - 1;
@@ -434,8 +407,6 @@ public class PauseMenu : IScene
 
             if (!c.Met)
             {
-                // Undiscovered detail
-                var unknownSz = Assets.MenuFont.MeasureString("???");
                 _spriteBatch.DrawString(Assets.TitleFont, "???",
                     new Vector2(detailX, detailY), _dimText);
                 _spriteBatch.DrawString(Assets.MenuFont,
@@ -444,53 +415,45 @@ public class PauseMenu : IScene
             }
             else
             {
-                // Name + title header
                 _spriteBatch.DrawString(Assets.TitleFont, c.Name,
-                    new Vector2(detailX, detailY), Color.White);
-
+                    new Vector2(detailX, detailY), _accent);
                 _spriteBatch.DrawString(Assets.MenuFont, c.Title,
-                    new Vector2(detailX, detailY + 56), new Color(200, 100, 120));
+                    new Vector2(detailX, detailY + 54), new Color(180, 100, 120));
 
-                // Accent line under header
-                DrawRect(new Rectangle(detailX, detailY + 80, detailW, 1), _accent);
-
-                // Portrait — tall on right side of detail panel
                 if (c.Portrait != null)
                 {
-                    int portH   = h - Pad * 2 - 90;
+                    int portH   = h - Padding - 90;
                     int portW   = (int)(portH * (float)c.Portrait.Width / c.Portrait.Height);
                     int portMax = detailW / 2;
                     if (portW > portMax) { portW = portMax; portH = (int)(portW * (float)c.Portrait.Height / c.Portrait.Width); }
-
                     int portX = detailX + detailW - portW;
                     int portY = detailY + 90;
-                    _spriteBatch.Draw(c.Portrait,
-                        new Rectangle(portX, portY, portW, portH),
-                        Color.White);
-
-                    // Fade the portrait edge into the panel background
-                    DrawRect(new Rectangle(portX - 20, portY, 20, portH),
-                        new Color(10, 10, 24, 180));
+                    _spriteBatch.Draw(c.Portrait, new Rectangle(portX, portY, portW, portH), Color.White);
+                    DrawRect(new Rectangle(portX - 20, portY, 20, portH), new Color(10, 10, 24, 180));
                 }
 
-                // Bio text — left side of detail panel
-                int bioX      = detailX;
-                int bioY      = detailY + 96;
-                int bioW      = detailW / 2 + 20;
-                float lineH   = Assets.MenuFont.LineSpacing + 6f;
-
-                foreach (var line in c.Bio)
+                // Bio is string[] — one paragraph per entry
+                int   bioX  = detailX;
+                int   bioY  = detailY + 96;
+                int   bioW  = detailW / 2 + 20;
+                float lineH = Assets.MenuFont.LineSpacing + 6f;
+                if (c.Bio != null)
                 {
-                    DrawWrappedText(line, bioX, ref bioY, bioW, lineH,
-                        new Color(170, 165, 200));
-                    bioY += (int)lineH / 2; // paragraph gap
+                    foreach (var line in c.Bio)
+                    {
+                        DrawWrappedText(line, bioX, ref bioY, bioW, lineH, new Color(170, 165, 200));
+                        bioY += (int)lineH / 2;
+                    }
                 }
             }
         }
     }
 
-    private void DrawWrappedText(string text, int x, ref int y, int maxW,
-        float lineH, Color color)
+    // -----------------------------------------------------------------------
+    // Text / rect helpers
+    // -----------------------------------------------------------------------
+
+    private void DrawWrappedText(string text, int x, ref int y, int maxW, float lineH, Color color)
     {
         var words = text.Split(' ');
         var line  = "";
@@ -500,8 +463,7 @@ public class PauseMenu : IScene
             var test = line.Length == 0 ? word : line + " " + word;
             if (Assets.MenuFont.MeasureString(test).X > maxW && line.Length > 0)
             {
-                _spriteBatch.DrawString(Assets.MenuFont, line,
-                    new Vector2(x, y), color);
+                _spriteBatch.DrawString(Assets.MenuFont, line, new Vector2(x, y), color);
                 y    += (int)lineH;
                 line  = word;
             }
@@ -509,8 +471,7 @@ public class PauseMenu : IScene
         }
         if (line.Length > 0)
         {
-            _spriteBatch.DrawString(Assets.MenuFont, line,
-                new Vector2(x, y), color);
+            _spriteBatch.DrawString(Assets.MenuFont, line, new Vector2(x, y), color);
             y += (int)lineH;
         }
     }
@@ -528,8 +489,7 @@ public class PauseMenu : IScene
     {
         var sz = Assets.MenuFont.MeasureString(text);
         _spriteBatch.DrawString(Assets.MenuFont, text,
-            new Vector2(rx + rw / 2f - sz.X / 2f, ry + rh / 2f - sz.Y / 2f),
-            color);
+            new Vector2(rx + rw / 2f - sz.X / 2f, ry + rh / 2f - sz.Y / 2f), color);
     }
 
     private Vector2 RoomCentre(MapRoom room, int mapX, int mapY, int mapW, int mapH) =>
@@ -548,10 +508,6 @@ public class PauseMenu : IScene
                 (int)(from.X + dir.X * t),
                 (int)(from.Y + dir.Y * t), 2, 2), color);
     }
-
-    // -----------------------------------------------------------------------
-    // Shared helpers
-    // -----------------------------------------------------------------------
 
     private void DrawRect(Rectangle rect, Color color) =>
         _spriteBatch.Draw(Assets.Pixel, rect, color);
