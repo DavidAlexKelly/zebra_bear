@@ -1,0 +1,161 @@
+{
+  "rooms": [
+    {
+      "id": "MainHall",
+      "label": "Main Hall",
+      "wallColor":  [22, 20, 38],
+      "floorColor": [18, 16, 28],
+      "ceilColor":  [12, 12, 22],
+      "entities": [
+        {
+          "type": "billboard",
+          "name": "Kei",
+          "position": [-4.0, -0.75, -10.0],
+          "width": 2.2,
+          "height": 4.5,
+          "tint": [180, 160, 220],
+          "isCharacter": true,
+          "sprite": null,
+          "dialogue": [
+            "Oh? You're actually talking to me?",
+            "I didn't think anyone would bother...",
+            "Well. Since you're here. My name is Kei.",
+            "Try not to die before we get off this island."
+          ]
+        },
+        {
+          "type": "billboard",
+          "name": "Haru",
+          "position": [5.0, -1.0, -11.0],
+          "width": 2.0,
+          "height": 4.0,
+          "tint": [160, 200, 180],
+          "isCharacter": true,
+          "sprite": null,
+          "dialogue": [
+            "Don't look at me.",
+            "I'm not interested in talking."
+          ]
+        },
+        {
+          "type": "orientedBox",
+          "name": "",
+          "centre": [13.9, 0.8, -4.0],
+          "width": 2.6,
+          "height": 3.6,
+          "normal": "east",
+          "tint": [40, 30, 22],
+          "depth": 0.15,
+          "solid": false,
+          "dialogue": null
+        },
+        {
+          "type": "orientedBox",
+          "name": "Locked Door",
+          "centre": [13.9, 0.6, -4.0],
+          "width": 2.2,
+          "height": 3.2,
+          "normal": "east",
+          "tint": [90, 65, 45],
+          "depth": 0.25,
+          "solid": true,
+          "dialogue": [
+            "The door leads to the main corridor.",
+            "Go through?"
+          ],
+          "onInteract": {
+            "type": "navigate",
+            "target": "Hub",
+            "choiceIndex": 0
+          }
+        },
+        {
+          "type": "orientedBox",
+          "name": "",
+          "centre": [-8.0, 1.3, -13.9],
+          "width": 2.8,
+          "height": 2.0,
+          "normal": "north",
+          "tint": [35, 28, 18],
+          "depth": 0.1,
+          "solid": false,
+          "dialogue": null
+        },
+        {
+          "type": "orientedBox",
+          "name": "Notice Board",
+          "centre": [-8.0, 1.3, -13.9],
+          "width": 2.4,
+          "height": 1.6,
+          "normal": "north",
+          "tint": [160, 130, 85],
+          "depth": 0.18,
+          "solid": true,
+          "dialogue": [
+            "A class schedule pinned up neatly.",
+            "Someone has drawn a small bear in the corner.",
+            "It's smiling."
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Table",
+          "position": [0.0, -3.0, 0.0],
+          "width": 2.8,
+          "depth": 1.4,
+          "height": 1.1,
+          "tint": [120, 85, 55],
+          "dialogue": [
+            "A plain wooden table.",
+            "Nothing on it. Someone cleared it recently."
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "Hub",
+      "label": "Main Corridor",
+      "wallColor":  [20, 18, 32],
+      "floorColor": [15, 14, 24],
+      "ceilColor":  [10, 10, 18],
+      "entities": []
+    },
+
+    {
+      "id": "RoomNorth",
+      "label": "North Wing",
+      "wallColor":  [18, 24, 30],
+      "floorColor": [14, 18, 22],
+      "ceilColor":  [10, 12, 16],
+      "entities": []
+    },
+
+    {
+      "id": "RoomSouth",
+      "label": "South Wing",
+      "wallColor":  [28, 18, 20],
+      "floorColor": [20, 14, 16],
+      "ceilColor":  [14, 10, 12],
+      "entities": []
+    },
+
+    {
+      "id": "RoomWest",
+      "label": "West Wing",
+      "wallColor":  [18, 26, 20],
+      "floorColor": [14, 18, 15],
+      "ceilColor":  [10, 14, 11],
+      "entities": []
+    },
+
+    {
+      "id": "RoomEast",
+      "label": "East Wing",
+      "wallColor":  [26, 22, 16],
+      "floorColor": [18, 16, 12],
+      "ceilColor":  [14, 12, 10],
+      "entities": []
+    }
+  ]
+}

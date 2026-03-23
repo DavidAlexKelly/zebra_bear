@@ -19,13 +19,11 @@ public class Camera
     private int   _centerY;
     private float _aspect;
 
-    // Forward includes pitch — used for looking and raycasting
     public Vector3 Forward => Vector3.Normalize(new Vector3(
         (float)(Math.Sin(Yaw) * Math.Cos(Pitch)),
         (float)Math.Sin(Pitch),
         (float)(Math.Cos(Yaw) * Math.Cos(Pitch))));
 
-    // Right is always horizontal — used for strafing and billboard orientation
     public Vector3 Right => Vector3.Normalize(new Vector3(
         (float)Math.Sin(Yaw + MathHelper.PiOver2), 0f,
         (float)Math.Cos(Yaw + MathHelper.PiOver2)));
@@ -50,31 +48,61 @@ public class Camera
     }
 
     /// <summary>
-    /// Update camera — mouse look, movement, collision resolution, room clamp.
-    ///
-    /// resolveCollisions: optional delegate from Room.ResolveCollisions.
-    /// Pass it to prevent the player walking through solid entities:
-    ///   _camera.Update(gameTime, captureMouse: true, _room.ResolveCollisions);
+    /// Standard update — box-clamped room (used by GameScene, Room2Scene, etc.)
     /// </summary>
     public void Update(GameTime gameTime, bool captureMouse,
         Func<Vector3, Vector3> resolveCollisions = null)
     {
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        var   kb = Keyboard.GetState();
-        var   ms = Mouse.GetState();
+        ApplyMouseLook(captureMouse);
+        ApplyMovement(dt);
 
-        // --- Mouse look ---
-        if (captureMouse)
-        {
-            int dx = ms.X - _centerX;
-            int dy = ms.Y - _centerY;
-            Yaw   -= dx * LookSpeed;
-            Pitch -= dy * LookSpeed;
-            Pitch  = Math.Clamp(Pitch, -MaxPitch, MaxPitch);
-            Mouse.SetPosition(_centerX, _centerY);
-        }
+        if (resolveCollisions != null)
+            Position = resolveCollisions(Position);
 
-        // --- WASD movement — always horizontal regardless of pitch ---
+        // Standard box clamp
+        Position.X = Math.Clamp(Position.X, -13f, 13f);
+        Position.Z = Math.Clamp(Position.Z, -13f, 13f);
+        Position.Y = 0f;
+    }
+
+    /// <summary>
+    /// Plus-room update — clamps the player inside the plus-shaped navigable area.
+    /// Used by HubScene.
+    /// </summary>
+    public void UpdateInPlus(GameTime gameTime, bool captureMouse,
+        Func<Vector3, Vector3> resolveCollisions = null)
+    {
+        float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        ApplyMouseLook(captureMouse);
+        ApplyMovement(dt);
+
+        if (resolveCollisions != null)
+            Position = resolveCollisions(Position);
+
+        Position = PlusRoom3D.ClampToPlus(Position, margin: 0.5f);
+        Position.Y = 0f;
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared movement helpers
+    // -----------------------------------------------------------------------
+
+    private void ApplyMouseLook(bool capture)
+    {
+        if (!capture) return;
+        var ms = Mouse.GetState();
+        int dx = ms.X - _centerX;
+        int dy = ms.Y - _centerY;
+        Yaw   -= dx * LookSpeed;
+        Pitch -= dy * LookSpeed;
+        Pitch  = Math.Clamp(Pitch, -MaxPitch, MaxPitch);
+        Mouse.SetPosition(_centerX, _centerY);
+    }
+
+    private void ApplyMovement(float dt)
+    {
+        var kb = Keyboard.GetState();
         var flatForward = Vector3.Normalize(new Vector3(
             (float)Math.Sin(Yaw), 0f, (float)Math.Cos(Yaw)));
 
@@ -92,14 +120,5 @@ public class Camera
                 : MoveSpeed;
             Position += move * speed * dt;
         }
-
-        // --- Collision resolution — push out of solid entities ---
-        if (resolveCollisions != null)
-            Position = resolveCollisions(Position);
-
-        // --- Clamp inside room bounds ---
-        Position.X = Math.Clamp(Position.X, -13f, 13f);
-        Position.Z = Math.Clamp(Position.Z, -13f, 13f);
-        Position.Y = 0f;
     }
 }

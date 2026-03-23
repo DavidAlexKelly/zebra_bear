@@ -1,0 +1,54 @@
+{
+  "startRoom": "MainHall",
+  "rooms": [
+    {
+      "id":         "MainHall",
+      "label":      "Main Hall",
+      "position":   [0.08, 0.40],
+      "size":       [0.18, 0.12],
+      "discovered": true
+    },
+    {
+      "id":         "Hub",
+      "label":      "Main Corridor",
+      "position":   [0.38, 0.40],
+      "size":       [0.22, 0.12],
+      "discovered": false
+    },
+    {
+      "id":         "RoomNorth",
+      "label":      "North Wing",
+      "position":   [0.44, 0.18],
+      "size":       [0.18, 0.12],
+      "discovered": false
+    },
+    {
+      "id":         "RoomSouth",
+      "label":      "South Wing",
+      "position":   [0.44, 0.64],
+      "size":       [0.18, 0.12],
+      "discovered": false
+    },
+    {
+      "id":         "RoomWest",
+      "label":      "West Wing",
+      "position":   [0.12, 0.40],
+      "size":       [0.18, 0.12],
+      "discovered": false
+    },
+    {
+      "id":         "RoomEast",
+      "label":      "East Wing",
+      "position":   [0.70, 0.40],
+      "size":       [0.18, 0.12],
+      "discovered": false
+    }
+  ],
+  "connections": [
+    { "fromId": "MainHall",  "toId": "Hub" },
+    { "fromId": "Hub",       "toId": "RoomNorth" },
+    { "fromId": "Hub",       "toId": "RoomSouth" },
+    { "fromId": "Hub",       "toId": "RoomWest" },
+    { "fromId": "Hub",       "toId": "RoomEast" }
+  ]
+}

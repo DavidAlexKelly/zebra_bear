@@ -1,0 +1,28 @@
+{
+  "characters": [
+    {
+      "id": "Kei",
+      "name": "Kei",
+      "title": "Ultimate ???",
+      "portrait": "Characters/monobear",
+      "met": false,
+      "bio": [
+        "A reserved student who seems reluctant to engage with others.",
+        "Despite the cold exterior, there's something calculating behind those eyes.",
+        "Met in the Main Hall on arrival."
+      ]
+    },
+    {
+      "id": "Haru",
+      "name": "Haru",
+      "title": "Ultimate ???",
+      "portrait": "Characters/usami",
+      "met": false,
+      "bio": [
+        "Actively hostile to conversation.",
+        "Refuses to make eye contact.",
+        "Standing alone near the back of the Main Hall."
+      ]
+    }
+  ]
+}

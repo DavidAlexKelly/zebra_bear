@@ -14,10 +14,13 @@ public class Game : Microsoft.Xna.Framework.Game
     private SceneManager _scenes;
     private PauseMenu    _pauseMenu;
 
-    // Scenes — created once, reused
     private MainMenuScene _mainMenuScene;
-    private GameScene     _gameScene;
-    private Room2Scene    _room2Scene;
+    private GameScene     _gameScene;       // Main Hall (starting room)
+    private HubScene      _hubScene;        // Plus-shaped connecting room
+    private Room2Scene    _roomNorthScene;
+    private Room2Scene    _roomSouthScene;
+    private Room2Scene    _roomWestScene;
+    private Room2Scene    _roomEastScene;
 
     private KeyboardState _prevKeys;
 
@@ -35,22 +38,26 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
-        // Load all shared assets first
         Assets.Load(Content, GraphicsDevice);
+        GameLoader.LoadCharacters(Content);
+        GameLoader.LoadMap();
 
-        // Assign character portraits now that assets are loaded
-        CharacterData.AssignPortraits();
-
-        // Build scenes
-        _mainMenuScene = new MainMenuScene(this, _spriteBatch);
-        _gameScene     = new GameScene(this, _spriteBatch);
-        _room2Scene    = new Room2Scene(this, _spriteBatch);
+        _mainMenuScene  = new MainMenuScene(this, _spriteBatch);
+        _gameScene      = new GameScene(this, _spriteBatch);
+        _hubScene       = new HubScene(this, _spriteBatch);
+        _roomNorthScene = new Room2Scene(this, _spriteBatch, "RoomNorth");
+        _roomSouthScene = new Room2Scene(this, _spriteBatch, "RoomSouth");
+        _roomWestScene  = new Room2Scene(this, _spriteBatch, "RoomWest");
+        _roomEastScene  = new Room2Scene(this, _spriteBatch, "RoomEast");
 
         _mainMenuScene.Load();
         _gameScene.Load();
-        _room2Scene.Load();
+        _hubScene.Load();
+        _roomNorthScene.Load();
+        _roomSouthScene.Load();
+        _roomWestScene.Load();
+        _roomEastScene.Load();
 
-        // Pause menu is a special IScene wrapper
         _pauseMenu = new PauseMenu(this, _spriteBatch);
         _pauseMenu.Load();
 
@@ -62,41 +69,55 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         var keys = Keyboard.GetState();
 
-        // Pause shortcut — intercept before routing to current scene
-        bool inGame = _scenes.Current is GameScene or Room2Scene;
+        bool inGame = _scenes.Current is GameScene
+                   or HubScene
+                   or Room2Scene;
+
         if (inGame && keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape))
-        {
             _scenes.Pause();
-        }
 
         _scenes.Update(gameTime);
+
+        if (NavigationBus.HasRequest)
+            HandleNavigation(NavigationBus.Consume());
 
         _prevKeys = keys;
         base.Update(gameTime);
     }
 
+    private void HandleNavigation(string destination)
+    {
+        switch (destination)
+        {
+            case "MainHall":  _scenes.ChangeTo(_gameScene);       break;
+            case "Hub":       _scenes.ChangeTo(_hubScene);        break;
+            case "RoomNorth": _scenes.ChangeTo(_roomNorthScene);  break;
+            case "RoomSouth": _scenes.ChangeTo(_roomSouthScene);  break;
+            case "RoomWest":  _scenes.ChangeTo(_roomWestScene);   break;
+            case "RoomEast":  _scenes.ChangeTo(_roomEastScene);   break;
+            case "MainMenu":  _scenes.ChangeTo(_mainMenuScene);   break;
+            default:
+                System.Console.WriteLine($"[Game] Unknown destination: '{destination}'");
+                break;
+        }
+    }
+
     protected override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(new Color(10, 10, 18));
-
-        // If paused, draw the underlying scene first, then the overlay
         if (_scenes.Current is PauseMenu)
-        {
             _scenes.DrawPrePause(gameTime);
-        }
-
         _scenes.Draw(gameTime);
-
         base.Draw(gameTime);
     }
 
     // -----------------------------------------------------------------------
-    // Public navigation API — called by scenes and the pause menu
+    // Navigation API (used by pause menu, scenes)
     // -----------------------------------------------------------------------
 
-    public void GoToMainMenu()   => _scenes.ChangeTo(_mainMenuScene);
-    public void GoToGame()       => _scenes.ChangeTo(_gameScene);
-    public void GoToRoom2()      => _scenes.ChangeTo(_room2Scene);
-    public void Resume()         => _scenes.Resume();
-    public void Pause()          => _scenes.Pause();
+    public void GoToMainMenu() => _scenes.ChangeTo(_mainMenuScene);
+    public void GoToGame()     => _scenes.ChangeTo(_gameScene);
+    public void GoToHub()      => _scenes.ChangeTo(_hubScene);
+    public void Resume()       => _scenes.Resume();
+    public void Pause()        => _scenes.Pause();
 }

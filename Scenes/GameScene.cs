@@ -2,14 +2,16 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Collections.Generic;
 using ZebraBear.Core;
 using ZebraBear.Entities;
 
 namespace ZebraBear.Scenes;
 
 /// <summary>
-/// Room 1 — the starting room.
-/// Add content in PopulateRoom() only. Nothing else needs to change.
+/// Room 1 — the starting room (Main Hall).
+/// All content defined in Data/rooms.json (id: "MainHall").
+/// The door leads to the Hub (plus-shaped connecting room).
 /// </summary>
 public class GameScene : IScene
 {
@@ -37,127 +39,25 @@ public class GameScene : IScene
     public void Load()
     {
         var vp = _game.GraphicsDevice.Viewport;
+        var (wall, floor, ceil, label) = GameLoader.ReadRoomColors("MainHall");
 
         _camera = new Camera(vp.Width / (float)vp.Height, new Vector3(0, 0, 8f));
         _camera.SetViewportCentre(vp.Width, vp.Height);
 
-        _room = new Room(_game.GraphicsDevice, label: "Main Hall");
+        _room = new Room(_game.GraphicsDevice,
+            wallColor: wall, floorColor: floor, ceilColor: ceil, label: label);
 
-        PopulateRoom();
+        // Door leads to Hub
+        var overrides = new Dictionary<string, Action<int>>
+        {
+            ["Locked Door"] = result => { if (result == 0) NavigationBus.RequestNavigate("Hub"); }
+        };
+
+        GameLoader.LoadRoom("MainHall", _room, overrides);
 
         _dialogueBox = new DialogueBox(_game, _spriteBatch);
         _portrait    = new CharacterPortrait(_game, _spriteBatch);
     }
-
-    private void PopulateRoom()
-    {
-        // --- Characters ---
-
-        _room.Add(new BillboardEntity
-        {
-            Name        = "Kei",
-            Position    = new Vector3(-4f, -0.75f, -10f),
-            Width       = 2.2f,
-            Height      = 4.5f,
-            Tint        = new Color(180, 160, 220),
-            IsCharacter = true,
-            // Sprite   = Assets.CharacterKei,
-            Dialogue    = new[]
-            {
-                "Oh? You're actually talking to me?",
-                "I didn't think anyone would bother...",
-                "Well. Since you're here. My name is Kei.",
-                "Try not to die before we get off this island."
-            }
-        });
-
-        _room.Add(new BillboardEntity
-        {
-            Name        = "Haru",
-            Position    = new Vector3(5f, -1f, -11f),
-            Width       = 2f,
-            Height      = 4f,
-            Tint        = new Color(160, 200, 180),
-            IsCharacter = true,
-            // Sprite   = Assets.CharacterHaru,
-            Dialogue    = new[]
-            {
-                "Don't look at me.",
-                "I'm not interested in talking."
-            }
-        });
-
-        // --- Wall objects ---
-
-        // Door frame (decorative — no name = not interactable, not solid)
-        var doorFrame = MeshEntity.CreateOrientedBox(
-            name:     "",
-            dialogue: null,
-            centre:   new Vector3(13.9f, -3f + 3.6f / 2f, -4f),
-            w: 2.6f,  h: 3.6f,
-            normal:   MeshBuilder.FaceEast,
-            tint:     new Color(40, 30, 22),
-            depth:    0.15f);
-        doorFrame.Solid = false;
-        _room.Add(doorFrame);
-
-        // Door (interactive)
-        var door = MeshEntity.CreateOrientedBox(
-            name:     "Locked Door",
-            dialogue: new[] { "The door is heavy but unlocked.", "Go through?" },
-            centre:   new Vector3(13.9f, -3f + 3.2f / 2f, -4f),
-            w: 2.2f,  h: 3.2f,
-            normal:   MeshBuilder.FaceEast,
-            tint:     new Color(90, 65, 45),
-            depth:    0.25f);
-
-        door.OnInteract = (result) => { if (result == 0) _game.GoToRoom2(); };
-        _room.Add(door);
-
-        // Notice board backing (decorative — not solid)
-        var boardBacking = MeshEntity.CreateOrientedBox(
-            name:     "",
-            dialogue: null,
-            centre:   new Vector3(-8f, -3f + 4.2f + 1.4f / 2f, -13.9f),
-            w: 2.8f,  h: 2.0f,
-            normal:   MeshBuilder.FaceNorth,
-            tint:     new Color(35, 28, 18),
-            depth:    0.1f);
-        boardBacking.Solid = false;
-        _room.Add(boardBacking);
-
-        // Notice board (interactive)
-        _room.Add(MeshEntity.CreateOrientedBox(
-            name:     "Notice Board",
-            dialogue: new[]
-            {
-                "A class schedule pinned up neatly.",
-                "Someone has drawn a small bear in the corner.",
-                "It's smiling."
-            },
-            centre:   new Vector3(-8f, -3f + 4.2f + 1.4f / 2f, -13.9f),
-            w: 2.4f,  h: 1.6f,
-            normal:   MeshBuilder.FaceNorth,
-            tint:     new Color(160, 130, 85),
-            depth:    0.18f));
-
-        // --- Furniture ---
-
-        _room.Add(MeshEntity.CreateTable(
-            name:     "Table",
-            dialogue: new[]
-            {
-                "A plain wooden table.",
-                "Nothing on it. Someone cleared it recently."
-            },
-            position: new Vector3(0f, -3f, 0f),
-            w: 2.8f, d: 1.4f, h: 1.1f,
-            tint:     new Color(120, 85, 55)));
-    }
-
-    // -----------------------------------------------------------------------
-    // IScene
-    // -----------------------------------------------------------------------
 
     public void OnEnter()
     {
@@ -174,7 +74,6 @@ public class GameScene : IScene
         var   mouse = Mouse.GetState();
         float dt    = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-        // Always update portrait so it can finish fading out after dialogue ends
         _portrait.Update(dt);
 
         if (_dialogueActive)
@@ -186,14 +85,12 @@ public class GameScene : IScene
             {
                 _dialogueActive      = false;
                 _game.IsMouseVisible = false;
-
                 _portrait.Hide();
                 if (_activeSpeaker != null)
                 {
                     _activeSpeaker.ActiveSpeaker = false;
                     _activeSpeaker = null;
                 }
-
                 var vp = _game.GraphicsDevice.Viewport;
                 Mouse.SetPosition(vp.Width / 2, vp.Height / 2);
             }
@@ -204,7 +101,6 @@ public class GameScene : IScene
         }
 
         _camera.Update(gameTime, captureMouse: true, _room.ResolveCollisions);
-
         _targeted = _room.UpdateRaycast(new Ray(_camera.Position, _camera.Forward));
 
         var  kb       = Keyboard.GetState();
@@ -229,15 +125,13 @@ public class GameScene : IScene
             choices: entity.HasChoice ? new[] { "Yes", "No" } : null);
         _dialogueActive = true;
 
-        // Show portrait and fade out the billboard if this is a character
         if (entity is BillboardEntity billboard && billboard.Sprite != null)
         {
-            _activeSpeaker              = billboard;
+            _activeSpeaker               = billboard;
             _activeSpeaker.ActiveSpeaker = true;
             _portrait.Show(billboard.Sprite);
         }
 
-        // Mark character as met for the Characters tab
         if (!string.IsNullOrEmpty(entity.Name))
             CharacterData.SetMet(entity.Name);
     }
@@ -255,10 +149,8 @@ public class GameScene : IScene
         _room.Draw(_camera, _dialogueActive, dt);
         DrawHUD(vp, gameTime);
 
-        // Portrait sits above the room, below the dialogue box
         if (_dialogueActive || _portrait.IsVisible)
             _portrait.Draw();
-
         if (_dialogueActive)
             _dialogueBox.Draw(gameTime);
     }

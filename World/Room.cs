@@ -9,34 +9,18 @@ namespace ZebraBear;
 /// <summary>
 /// A self-contained room: geometry + entities + interaction logic.
 /// Scenes create and configure a Room; they don't manage entity lists directly.
-///
-/// To make a new room:
-///   var room = new Room(gd, wallColor, floorColor, ceilColor, label: "Library");
-///   room.Add(MeshEntity.CreateTable(...));
-///   room.Add(new BillboardEntity { ... });
 /// </summary>
 public class Room
 {
-    // -----------------------------------------------------------------------
-    // Public config
-    // -----------------------------------------------------------------------
-    public string Label = "";   // shown top-left in the HUD
+    public string Label = "";
 
-    // -----------------------------------------------------------------------
-    // Private state
-    // -----------------------------------------------------------------------
     private readonly GraphicsDevice _gd;
     private readonly Room3D         _geometry;
     private readonly BasicEffect    _meshEffect;
     private readonly BasicEffect    _billboardEffect;
 
     private readonly List<Entity>   _entities = new();
-
     private Entity _targeted;
-
-    // -----------------------------------------------------------------------
-    // Construction
-    // -----------------------------------------------------------------------
 
     public Room(GraphicsDevice gd,
         Color? wallColor  = null,
@@ -44,8 +28,8 @@ public class Room
         Color? ceilColor  = null,
         string label      = "")
     {
-        _gd    = gd;
-        Label  = label;
+        _gd   = gd;
+        Label = label;
 
         _geometry = new Room3D(gd, wallColor, floorColor, ceilColor);
 
@@ -80,15 +64,6 @@ public class Room
     // Collision
     // -----------------------------------------------------------------------
 
-    /// <summary>
-    /// Given a proposed player position, pushes it out of any solid entity
-    /// bounds and returns the corrected position.
-    ///
-    /// Uses a player capsule approximated as a small AABB:
-    ///   width/depth = PlayerRadius * 2, height = PlayerHeight.
-    ///
-    /// Call this from Camera.Update() after applying movement, before clamping.
-    /// </summary>
     public Vector3 ResolveCollisions(Vector3 position)
     {
         const float PlayerRadius = 0.4f;
@@ -101,31 +76,23 @@ public class Room
             if (!e.Solid) continue;
 
             var bounds = e.Bounds;
-
-            // No overlap — skip (Y check omitted: player is always on the floor,
-            // so we resolve horizontally against any object regardless of height)
             if (playerMax.X <= bounds.Min.X || playerMin.X >= bounds.Max.X) continue;
             if (playerMax.Z <= bounds.Min.Z || playerMin.Z >= bounds.Max.Z) continue;
 
-            // Overlap on all axes — find the smallest penetration and push out
             float overlapNegX = playerMax.X - bounds.Min.X;
             float overlapPosX = bounds.Max.X - playerMin.X;
             float overlapNegZ = playerMax.Z - bounds.Min.Z;
             float overlapPosZ = bounds.Max.Z - playerMin.Z;
 
-            // Only resolve horizontally — we don't want vertical pushback
-            // (player is always clamped to floor anyway)
             float minOverlap = MathF.Min(
                 MathF.Min(overlapNegX, overlapPosX),
                 MathF.Min(overlapNegZ, overlapPosZ));
 
-            if (minOverlap == overlapNegX) position.X = bounds.Min.X - PlayerRadius;
+            if      (minOverlap == overlapNegX) position.X = bounds.Min.X - PlayerRadius;
             else if (minOverlap == overlapPosX) position.X = bounds.Max.X + PlayerRadius;
             else if (minOverlap == overlapNegZ) position.Z = bounds.Min.Z - PlayerRadius;
             else                                position.Z = bounds.Max.Z + PlayerRadius;
 
-            // Recompute player bounds after each push so multiple
-            // overlapping objects resolve correctly
             playerMin.X = position.X - PlayerRadius;
             playerMax.X = position.X + PlayerRadius;
             playerMin.Z = position.Z - PlayerRadius;
@@ -136,7 +103,7 @@ public class Room
     }
 
     // -----------------------------------------------------------------------
-    // Update — raycast only; interaction is handled by the owning scene
+    // Raycast
     // -----------------------------------------------------------------------
 
     public Entity UpdateRaycast(Ray ray, float maxDistance = 14f)
@@ -158,7 +125,7 @@ public class Room
     }
 
     // -----------------------------------------------------------------------
-    // Draw
+    // Draw — full (geometry + entities)
     // -----------------------------------------------------------------------
 
     public void Draw(Camera camera, bool dialogueActive, float dt = 0f)
@@ -167,7 +134,6 @@ public class Room
         _gd.BlendState        = BlendState.Opaque;
         _gd.RasterizerState   = RasterizerState.CullCounterClockwise;
 
-        // Update billboard fade for active speaker
         foreach (var e in _entities)
             if (e is BillboardEntity b) b.UpdateSpeakerFade(dt);
 
@@ -177,36 +143,62 @@ public class Room
         DrawBillboardEntities(camera, dialogueActive);
     }
 
+    // -----------------------------------------------------------------------
+    // Draw — entities only (no Room3D geometry)
+    // Used by scenes that supply their own room geometry (e.g. HubScene).
+    // -----------------------------------------------------------------------
+
+    public void DrawEntitiesOnly(Camera camera, bool dialogueActive, float dt,
+        BasicEffect meshEffect, BasicEffect billboardEffect)
+    {
+        foreach (var e in _entities)
+            if (e is BillboardEntity b) b.UpdateSpeakerFade(dt);
+
+        DrawMeshEntitiesWithEffect(camera, dialogueActive, meshEffect);
+        DrawBillboardEntitiesWithEffect(camera, dialogueActive, billboardEffect);
+    }
+
+    // -----------------------------------------------------------------------
+    // Private draw helpers
+    // -----------------------------------------------------------------------
+
     private void DrawMeshEntities(Camera camera, bool dialogueActive)
+    {
+        DrawMeshEntitiesWithEffect(camera, dialogueActive, _meshEffect);
+    }
+
+    private void DrawMeshEntitiesWithEffect(Camera camera, bool dialogueActive, BasicEffect fx)
     {
         _gd.DepthStencilState = DepthStencilState.Default;
         _gd.BlendState        = BlendState.Opaque;
         _gd.RasterizerState   = RasterizerState.CullNone;
 
-        _meshEffect.View               = camera.View;
-        _meshEffect.Projection         = camera.Projection;
-        _meshEffect.World              = Matrix.Identity;
-        _meshEffect.VertexColorEnabled = true;
-        _meshEffect.TextureEnabled     = false;
-        _meshEffect.LightingEnabled    = false;
+        fx.View               = camera.View;
+        fx.Projection         = camera.Projection;
+        fx.World              = Matrix.Identity;
+        fx.VertexColorEnabled = true;
+        fx.TextureEnabled     = false;
+        fx.LightingEnabled    = false;
 
         foreach (var e in _entities)
         {
             if (e is not MeshEntity) continue;
             bool targeted = e == _targeted && !dialogueActive;
-            e.Draw(_gd, _meshEffect, targeted);
+            e.Draw(_gd, fx, targeted);
         }
     }
 
     private void DrawBillboardEntities(Camera camera, bool dialogueActive)
     {
-        // Read depth but don't write it — transparent pixels on sprites
-        // won't occlude geometry behind them
+        DrawBillboardEntitiesWithEffect(camera, dialogueActive, _billboardEffect);
+    }
+
+    private void DrawBillboardEntitiesWithEffect(Camera camera, bool dialogueActive, BasicEffect fx)
+    {
         _gd.DepthStencilState = DepthStencilState.DepthRead;
         _gd.BlendState        = BlendState.AlphaBlend;
         _gd.RasterizerState   = RasterizerState.CullNone;
 
-        // Depth-sort billboards back to front
         var billboards = new List<BillboardEntity>();
         foreach (var e in _entities)
             if (e is BillboardEntity b) billboards.Add(b);
@@ -215,20 +207,20 @@ public class Room
             Vector3.DistanceSquared(b.Position, camera.Position)
                 .CompareTo(Vector3.DistanceSquared(a.Position, camera.Position)));
 
-        _billboardEffect.View               = camera.View;
-        _billboardEffect.Projection         = camera.Projection;
-        _billboardEffect.World              = Matrix.Identity;
-        _billboardEffect.VertexColorEnabled = true;
-        _billboardEffect.LightingEnabled    = false;
+        fx.View               = camera.View;
+        fx.Projection         = camera.Projection;
+        fx.World              = Matrix.Identity;
+        fx.VertexColorEnabled = true;
+        fx.LightingEnabled    = false;
 
         BillboardEntity.CamRight = camera.Right;
 
         foreach (var b in billboards)
         {
-            bool targeted      = b == _targeted && !dialogueActive;
-            _billboardEffect.Alpha = b.SpeakerAlpha;
-            b.Draw(_gd, _billboardEffect, targeted);
+            bool targeted = b == _targeted && !dialogueActive;
+            fx.Alpha = b.SpeakerAlpha;
+            b.Draw(_gd, fx, targeted);
         }
-        _billboardEffect.Alpha = 1f; // reset
+        fx.Alpha = 1f;
     }
 }
