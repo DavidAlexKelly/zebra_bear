@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿//======== Game.cs ========
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Collections.Generic;
@@ -7,35 +8,29 @@ using ZebraBear.Scenes;
 
 namespace ZebraBear;
 
-/// <summary>
-/// Application entry point and scene router.
-/// Implements IGameHost so that scenes can call back into the host without
-/// depending on the concrete ZebraBear.Game type (which shadows
-/// Microsoft.Xna.Framework.Game and causes CS1061 in some compiler versions).
-/// </summary>
 public class Game : Microsoft.Xna.Framework.Game, IGameHost
 {
-    private GraphicsDeviceManager    _graphics;
-    private SpriteBatch              _spriteBatch;
-
-    private SceneManager             _scenes;
-    private PauseMenu                _pauseMenu;
-    private MainMenuScene            _mainMenuScene;
-    private LevelEditorScene         _levelEditorScene;
-    private RoomGeometryEditorScene  _roomGeoEditorScene;
-
-    private readonly Dictionary<string, IScene> _roomScenes = new();
-
+    private GraphicsDeviceManager _graphics;
+    private SpriteBatch _spriteBatch;
+    private SceneManager _scenes;
+    private PauseMenu _pauseMenu;
+    private MainMenuScene _mainMenuScene;
+    private LevelSelectScene _levelSelectScene;
+    private LevelEditorScene _levelEditorScene;
+    private RoomGeometryEditorScene _roomGeoEditorScene;
+    private InteractionEditorScene _interactionEditorScene;
+    private Dictionary<string, IScene> _roomScenes = new();
     private KeyboardState _prevKeys;
 
     public Game()
     {
         _graphics = new GraphicsDeviceManager(this);
-        _graphics.PreferredBackBufferWidth  = 1280;
+        _graphics.PreferredBackBufferWidth = 1280;
         _graphics.PreferredBackBufferHeight = 720;
         _graphics.IsFullScreen = false;
-        Content.RootDirectory  = "Content";
-        IsMouseVisible         = false;
+        _graphics.HardwareModeSwitch = false;
+        Content.RootDirectory = "Content";
+        IsMouseVisible = false;
     }
 
     protected override void LoadContent()
@@ -45,29 +40,26 @@ public class Game : Microsoft.Xna.Framework.Game, IGameHost
         ZebraBearEntities.Content = Content;
         ZebraBearEntities.Register();
         ModelExporter.ExportAll();
-
         Assets.Load(Content, GraphicsDevice);
+
         GameLoader.LoadCharacters(Content);
         GameLoader.LoadMap();
-
-        foreach (var mapRoom in MapData.Rooms)
-        {
-            var sceneType = mapRoom.SceneType == "plus"
-                ? RoomSceneType.Plus
-                : RoomSceneType.Box;
-
-            var scene = new RoomScene(this, _spriteBatch, mapRoom.Id, sceneType);
-            scene.Load();
-            _roomScenes[mapRoom.Id] = scene;
-        }
+        BuildRoomScenes();
 
         _mainMenuScene = new MainMenuScene(this, _spriteBatch);
         _mainMenuScene.Load();
 
+        _levelSelectScene = new LevelSelectScene(this, _spriteBatch);
+        _levelSelectScene.Load();
+
         _roomGeoEditorScene = new RoomGeometryEditorScene(this, _spriteBatch);
         _roomGeoEditorScene.Load();
 
-        _levelEditorScene = new LevelEditorScene(this, _spriteBatch, _roomGeoEditorScene);
+        _interactionEditorScene = new InteractionEditorScene(this, _spriteBatch);
+        _interactionEditorScene.Load();
+
+        _levelEditorScene = new LevelEditorScene(this, _spriteBatch,
+            _roomGeoEditorScene, _interactionEditorScene);
         _levelEditorScene.Load();
 
         _pauseMenu = new PauseMenu(this, _spriteBatch);
@@ -77,13 +69,32 @@ public class Game : Microsoft.Xna.Framework.Game, IGameHost
         _scenes.ChangeTo(_mainMenuScene);
     }
 
+    private void BuildRoomScenes()
+    {
+        _roomScenes.Clear();
+        foreach (var mapRoom in MapData.Rooms)
+        {
+            var sceneType = mapRoom.SceneType == "plus"
+                ? RoomSceneType.Plus : RoomSceneType.Box;
+            var scene = new RoomScene(this, _spriteBatch, mapRoom.Id, sceneType);
+            scene.Load();
+            _roomScenes[mapRoom.Id] = scene;
+        }
+    }
+
     protected override void Update(GameTime gameTime)
     {
         var keys = Keyboard.GetState();
-
         bool inGame = _scenes.Current is RoomScene;
+
         if (inGame && keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape))
             _scenes.Pause();
+
+        bool f11 = keys.IsKeyDown(Keys.F11) && _prevKeys.IsKeyUp(Keys.F11);
+        bool altEnter = (keys.IsKeyDown(Keys.LeftAlt) || keys.IsKeyDown(Keys.RightAlt))
+                        && keys.IsKeyDown(Keys.Enter) && _prevKeys.IsKeyUp(Keys.Enter);
+        if (f11 || altEnter)
+            ToggleFullscreen();
 
         _scenes.Update(gameTime);
 
@@ -98,9 +109,29 @@ public class Game : Microsoft.Xna.Framework.Game, IGameHost
     {
         switch (destination)
         {
-            case "MainMenu":    _scenes.ChangeTo(_mainMenuScene);    return;
-            case "LevelEditor": _scenes.ChangeTo(_levelEditorScene); return;
-            case "RoomGeoEditor": _scenes.ChangeTo(_roomGeoEditorScene); return;
+            case "MainMenu":
+                LevelData.ClearOverride();
+                _scenes.ChangeTo(_mainMenuScene);
+                return;
+            case "LevelSelect":
+                _scenes.ChangeTo(_levelSelectScene);
+                return;
+            case "LevelEditor":
+                _scenes.ChangeTo(_levelEditorScene);
+                return;
+            case "RoomGeoEditor":
+                _scenes.ChangeTo(_roomGeoEditorScene);
+                return;
+            case "InteractionEditor":
+                _scenes.ChangeTo(_interactionEditorScene);
+                return;
+            case "__reload_and_start__":
+                BuildRoomScenes();
+                if (_roomScenes.TryGetValue(MapData.CurrentRoomId, out var startScene))
+                    _scenes.ChangeTo(startScene);
+                else
+                    System.Console.WriteLine($"[Game] Start room '{MapData.CurrentRoomId}' not found.");
+                return;
         }
 
         if (_roomScenes.TryGetValue(destination, out var scene))
@@ -121,14 +152,28 @@ public class Game : Microsoft.Xna.Framework.Game, IGameHost
         base.Draw(gameTime);
     }
 
-    // -----------------------------------------------------------------------
-    // IGameHost implementation
-    // -----------------------------------------------------------------------
+    private void ToggleFullscreen()
+    {
+        if (_graphics.IsFullScreen)
+        {
+            _graphics.PreferredBackBufferWidth = 1280;
+            _graphics.PreferredBackBufferHeight = 720;
+            _graphics.IsFullScreen = false;
+        }
+        else
+        {
+            _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+            _graphics.IsFullScreen = true;
+        }
+        _graphics.ApplyChanges();
+    }
 
-    public void Resume()       => _scenes.Resume();
-    public void GoToMainMenu() => _scenes.ChangeTo(_mainMenuScene);
-
-    // Exit() is already defined on Microsoft.Xna.Framework.Game — no override needed.
-    // The interface re-exposes it so callers typed as IGameHost can call it.
+    public void Resume() => _scenes.Resume();
+    public void GoToMainMenu()
+    {
+        LevelData.ClearOverride();
+        _scenes.ChangeTo(_mainMenuScene);
+    }
     void IGameHost.Exit() => base.Exit();
 }

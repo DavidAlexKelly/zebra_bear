@@ -1,50 +1,35 @@
+//======== Scenes/RoomShapeData.cs ========
 using System.Collections.Generic;
 
 namespace ZebraBear.Scenes;
 
-/// <summary>
-/// Stores the floor-tile grid for a room being edited.
-/// A tile at (col, row) is "filled" if it's in the set.
-/// The grid is bounded to MaxSize x MaxSize.
-/// Wall edges are derived on-the-fly from empty neighbours.
-/// </summary>
 public class RoomShapeData
 {
     public const int MaxSize = 20;
 
-    // Set of filled tile coordinates (col, row) — (0,0) is top-left
     private readonly HashSet<(int col, int row)> _tiles = new();
-
     public IReadOnlyCollection<(int col, int row)> Tiles => _tiles;
 
     public bool IsFilled(int col, int row) => _tiles.Contains((col, row));
-
     public void Fill(int col, int row)
     {
         if (col < 0 || row < 0 || col >= MaxSize || row >= MaxSize) return;
         _tiles.Add((col, row));
     }
-
     public void Clear(int col, int row) => _tiles.Remove((col, row));
-
     public int TileCount => _tiles.Count;
 
-    /// <summary>
-    /// Returns which of the four edges of tile (col,row) are wall edges —
-    /// i.e. the neighbour in that direction is empty or out of bounds.
-    /// </summary>
     public WallEdges GetWalls(int col, int row)
     {
         if (!IsFilled(col, row)) return WallEdges.None;
         var w = WallEdges.None;
-        if (!IsFilled(col,     row - 1)) w |= WallEdges.North;
-        if (!IsFilled(col,     row + 1)) w |= WallEdges.South;
-        if (!IsFilled(col - 1, row    )) w |= WallEdges.West;
-        if (!IsFilled(col + 1, row    )) w |= WallEdges.East;
+        if (!IsFilled(col, row - 1)) w |= WallEdges.North;
+        if (!IsFilled(col, row + 1)) w |= WallEdges.South;
+        if (!IsFilled(col - 1, row)) w |= WallEdges.West;
+        if (!IsFilled(col + 1, row)) w |= WallEdges.East;
         return w;
     }
 
-    /// <summary>Seed with the default 10x10 square.</summary>
     public void FillDefault()
     {
         _tiles.Clear();
@@ -54,7 +39,6 @@ public class RoomShapeData
                 _tiles.Add((c, r));
     }
 
-    /// <summary>Serialise to a compact string for JSON storage (e.g. "3,4;3,5;4,4").</summary>
     public string Serialise()
     {
         var parts = new List<string>();
@@ -62,7 +46,6 @@ public class RoomShapeData
         return string.Join(";", parts);
     }
 
-    /// <summary>Deserialise from a compact string.</summary>
     public void Deserialise(string data)
     {
         _tiles.Clear();
@@ -74,6 +57,45 @@ public class RoomShapeData
                 _tiles.Add((c, r));
         }
     }
+
+    private readonly List<PlacedObject> _objects = new();
+    public IReadOnlyList<PlacedObject> Objects => _objects;
+    public void AddObject(PlacedObject obj) => _objects.Add(obj);
+    public void RemoveObject(PlacedObject obj) => _objects.Remove(obj);
+    public PlacedObject ObjectAt(int col, int row)
+    {
+        for (int i = _objects.Count - 1; i >= 0; i--)
+            if (_objects[i].Col == col && _objects[i].Row == row) return _objects[i];
+        return null;
+    }
+
+    private readonly List<PlacedCharacter> _characters = new();
+    public IReadOnlyList<PlacedCharacter> Characters => _characters;
+    public void AddCharacter(PlacedCharacter ch) => _characters.Add(ch);
+    public void RemoveCharacter(PlacedCharacter ch) => _characters.Remove(ch);
+    public PlacedCharacter CharacterAt(int col, int row)
+    {
+        for (int i = _characters.Count - 1; i >= 0; i--)
+            if (_characters[i].Col == col && _characters[i].Row == row) return _characters[i];
+        return null;
+    }
+}
+
+public class PlacedObject
+{
+    public string Type;
+    public int Col;
+    public int Row;
+    public string InteractionId = null;
+}
+
+public class PlacedCharacter
+{
+    public string Name = "";
+    public int Col;
+    public int Row;
+    public int TintR = 180, TintG = 160, TintB = 220;
+    public string InteractionId = null;
 }
 
 [System.Flags]

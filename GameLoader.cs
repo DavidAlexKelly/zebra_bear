@@ -161,14 +161,18 @@ public static class GameLoader
     /// </summary>
     public static void LoadRoom(string roomId, Room room)
     {
-        var path = DataPath("rooms.json");
+        // Check for level override first
+        var path = LevelData._levelRoomsOverride != null && File.Exists(LevelData._levelRoomsOverride)
+            ? LevelData._levelRoomsOverride
+            : DataPath("rooms.json");
+
         if (!File.Exists(path))
         {
             Console.WriteLine($"[GameLoader] WARNING: {path} not found.");
             return;
         }
 
-        var root     = JsonNode.Parse(File.ReadAllText(path));
+        var root = JsonNode.Parse(File.ReadAllText(path));
         var roomsArr = root!["rooms"]!.AsArray();
         JsonNode roomNode = null;
 
@@ -211,7 +215,10 @@ public static class GameLoader
     public static (Color? wall, Color? floor, Color? ceil, string label)
         ReadRoomColors(string roomId)
     {
-        var path = DataPath("rooms.json");
+        var path = LevelData._levelRoomsOverride != null && File.Exists(LevelData._levelRoomsOverride)
+            ? LevelData._levelRoomsOverride
+            : DataPath("rooms.json");
+
         if (!File.Exists(path)) return (null, null, null, roomId);
 
         var root     = JsonNode.Parse(File.ReadAllText(path));
