@@ -1,17 +1,24 @@
-// ======== UI/DialogueBox.cs ========
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
 using ZebraBear.Core;
+using ZebraBear.Scenes;
 using ZebraBear.UI;
 
 namespace ZebraBear;
 
 /// <summary>
 /// Danganronpa-style dialogue panel.
-/// Drives a DialogueNode tree. Handles multi-level branching internally.
+///
+/// Drives an InteractionNode tree — the single representation authored
+/// in the editor and stored in InteractionDef. All branching and navigation
+/// are handled here; the scene just calls StartDialogue(entity.Interaction)
+/// and checks IsFinished each frame.
+///
+/// Navigation (InteractionNode.NavigateTarget / InteractionChoice.NavigateTarget)
+/// is executed directly via NavigationBus — no compiled delegate callbacks.
 /// </summary>
 public class DialogueBox
 {
@@ -24,8 +31,7 @@ public class DialogueBox
     // -----------------------------------------------------------------------
     // Tree state
     // -----------------------------------------------------------------------
-    private DialogueNode _currentNode;
-    private string[] _resolvedLines;
+    private InteractionNode _currentNode;
     private int _currentLine;
     private bool _showingChoice;
     private int _choiceIndex;
@@ -34,7 +40,7 @@ public class DialogueBox
     // Typewriter state
     // -----------------------------------------------------------------------
     private float _charTimer;
-    private float _charInterval = 0.03f;
+    private const float CharInterval = 0.03f;
     private int _visibleChars;
     private bool _lineComplete;
 
@@ -43,7 +49,6 @@ public class DialogueBox
     // -----------------------------------------------------------------------
     public string SpeakerName = "";
     public bool IsFinished = false;
-    public Action<int> OnChoice;
 
     // -----------------------------------------------------------------------
     // Choice button rects (set during Draw, read during Update for mouse clicks)
@@ -54,7 +59,6 @@ public class DialogueBox
     // Input tracking
     // -----------------------------------------------------------------------
     private KeyboardState _prevKb;
-    private MouseState _prevMouse;
     private bool _prevKbInitialised = false;
 
     // -----------------------------------------------------------------------
@@ -69,40 +73,28 @@ public class DialogueBox
     // -----------------------------------------------------------------------
     // Start
     // -----------------------------------------------------------------------
-    public void StartDialogue(DialogueNode root)
-    {
-        IsFinished = false;
-        _choiceRects.Clear();
-        _prevKbInitialised = false;
-        EnterNode(root);
-    }
 
-    public void StartDialogue(string[] lines, string[] choices = null)
+    /// <summary>
+    /// Begin dialogue from the root node of an InteractionDef.
+    /// Call this when the player interacts with an entity.
+    /// </summary>
+    public void StartDialogue(InteractionDef interaction)
     {
-        var node = DialogueTreeParser.FromFlatLines(lines);
-        if (choices != null && choices.Length > 0 && node != null)
-            foreach (var label in choices)
-                node.Choices.Add(new DialogueChoice { Label = label, Next = null });
         IsFinished = false;
         _choiceRects.Clear();
         _prevKbInitialised = false;
-        EnterNode(node);
+        EnterNode(interaction.Root);
     }
 
     // -----------------------------------------------------------------------
     // Node transition
     // -----------------------------------------------------------------------
-    private void EnterNode(DialogueNode node)
+    private void EnterNode(InteractionNode node)
     {
         _currentNode = node;
-        _resolvedLines = node?.ResolveLines() ?? Array.Empty<string>();
         _currentLine = 0;
         _showingChoice = false;
         _choiceIndex = 0;
-        _choiceRects.Clear();
-        if (node != null)
-            foreach (var action in node.OnEnterActions)
-                action?.Invoke(-1);
         BeginLine();
     }
 
@@ -123,47 +115,49 @@ public class DialogueBox
         var kb = Keyboard.GetState();
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-        // Initialise prev state on first frame to avoid phantom inputs
-        if (!_prevKbInitialised)
-        {
-            _prevKb = kb;
-            _prevMouse = mouse;
-            _prevKbInitialised = true;
-            return;
-        }
+        // Skip the very first frame's confirm so the key that opened dialogue
+        // doesn't immediately advance it.
+        if (!_prevKbInitialised) { _prevKb = kb; _prevKbInitialised = true; }
 
-        bool clicked = mouse.LeftButton == ButtonState.Released &&
-                       prevMouse.LeftButton == ButtonState.Pressed;
+        bool clicked =
+            mouse.LeftButton == ButtonState.Released &&
+            prevMouse.LeftButton == ButtonState.Pressed;
 
-        bool confirmKey = (kb.IsKeyDown(Keys.Enter) && !_prevKb.IsKeyDown(Keys.Enter)) ||
-                          (kb.IsKeyDown(Keys.Z) && !_prevKb.IsKeyDown(Keys.Z));
+        bool confirm =
+            clicked ||
+            (kb.IsKeyDown(Keys.Enter) && !_prevKb.IsKeyDown(Keys.Enter)) ||
+            (kb.IsKeyDown(Keys.Z)     && !_prevKb.IsKeyDown(Keys.Z));
+
+        _prevKb = kb;
 
         if (_showingChoice)
         {
-            UpdateChoiceInput(kb, mouse, clicked, confirmKey);
-            _prevKb = kb;
-            _prevMouse = mouse;
+            UpdateChoiceInput(kb, mouse, clicked, confirm);
             return;
         }
 
-        bool confirm = clicked || confirmKey;
         UpdateTypewriter(dt, confirm);
-
-        _prevKb = kb;
-        _prevMouse = mouse;
     }
 
     private void UpdateTypewriter(float dt, bool confirm)
     {
-        if (_resolvedLines.Length == 0) { AdvancePastLines(); return; }
+        var lines = _currentNode.Lines;
 
-        var currentText = _resolvedLines[_currentLine];
+        if (lines.Count == 0)
+        {
+            // No lines — jump straight to choices or finish.
+            AdvancePastLines();
+            return;
+        }
+
+        string currentText = lines[_currentLine];
+
         if (!_lineComplete)
         {
             _charTimer += dt;
-            while (_charTimer >= _charInterval && _visibleChars < currentText.Length)
+            while (_charTimer >= CharInterval && _visibleChars < currentText.Length)
             {
-                _charTimer -= _charInterval;
+                _charTimer -= CharInterval;
                 _visibleChars++;
             }
             if (_visibleChars >= currentText.Length) _lineComplete = true;
@@ -174,7 +168,7 @@ public class DialogueBox
         if (confirm)
         {
             _currentLine++;
-            if (_currentLine >= _resolvedLines.Length) AdvancePastLines();
+            if (_currentLine >= lines.Count) AdvancePastLines();
             else BeginLine();
         }
     }
@@ -189,8 +183,10 @@ public class DialogueBox
         }
         else
         {
-            OnChoice?.Invoke(0);
-            OnChoice = null;
+            // Leaf node — handle any navigation target, then finish.
+            if (!string.IsNullOrEmpty(_currentNode.NavigateTarget))
+                NavigationBus.RequestNavigate(_currentNode.NavigateTarget);
+
             IsFinished = true;
         }
     }
@@ -199,48 +195,30 @@ public class DialogueBox
     {
         var choices = _currentNode.Choices;
 
-        // Keyboard navigation - left/right arrows
-        if (kb.IsKeyDown(Keys.Left) && !_prevKb.IsKeyDown(Keys.Left))
+        // Keyboard navigation
+        if (kb.IsKeyDown(Keys.Left)  && !_prevKb.IsKeyDown(Keys.Left))
             _choiceIndex = Math.Max(0, _choiceIndex - 1);
         if (kb.IsKeyDown(Keys.Right) && !_prevKb.IsKeyDown(Keys.Right))
             _choiceIndex = Math.Min(choices.Count - 1, _choiceIndex + 1);
-
-        // A/D keys for navigation
         if (kb.IsKeyDown(Keys.A) && !_prevKb.IsKeyDown(Keys.A))
             _choiceIndex = Math.Max(0, _choiceIndex - 1);
         if (kb.IsKeyDown(Keys.D) && !_prevKb.IsKeyDown(Keys.D))
             _choiceIndex = Math.Min(choices.Count - 1, _choiceIndex + 1);
 
-        // Mouse hover - update selection based on mouse position
+        // Mouse hover
         var mp = mouse.Position;
         for (int i = 0; i < _choiceRects.Count; i++)
-        {
-            if (_choiceRects[i].Contains(mp))
-            {
-                _choiceIndex = i;
-                break;
-            }
-        }
+            if (_choiceRects[i].Contains(mp)) { _choiceIndex = i; break; }
 
-        // Mouse click on a choice button
+        // Mouse click
         if (clicked)
         {
             for (int i = 0; i < _choiceRects.Count; i++)
-            {
-                if (_choiceRects[i].Contains(mp))
-                {
-                    _choiceIndex = i;
-                    ConfirmChoice();
-                    return;
-                }
-            }
-            // Click outside choices does nothing
+                if (_choiceRects[i].Contains(mp)) { _choiceIndex = i; ConfirmChoice(); return; }
             return;
         }
 
-        // Keyboard confirm
-        if (confirmKey)
-            ConfirmChoice();
+        if (confirmKey) ConfirmChoice();
     }
 
     private void ConfirmChoice()
@@ -250,12 +228,11 @@ public class DialogueBox
 
         var chosen = choices[_choiceIndex];
 
-        foreach (var action in chosen.OnSelectActions)
-            action?.Invoke(_choiceIndex);
+        // Handle navigation on the choice itself.
+        if (!string.IsNullOrEmpty(chosen.NavigateTarget))
+            NavigationBus.RequestNavigate(chosen.NavigateTarget);
 
-        OnChoice?.Invoke(_choiceIndex);
-        OnChoice = null;
-
+        // Descend into the next node, or finish.
         if (chosen.Next != null)
             EnterNode(chosen.Next);
         else
@@ -268,15 +245,14 @@ public class DialogueBox
     public void Draw(GameTime gameTime)
     {
         var vp = _game.GraphicsDevice.Viewport;
-        int boxH = Math.Max(140, (int)(vp.Height * 0.22f));
+        int boxH  = Math.Max(140, (int)(vp.Height * 0.22f));
         int boxMX = Math.Max(30, (int)(vp.Width * 0.04f));
-        int boxW = vp.Width - boxMX * 2;
-        int boxX = boxMX;
-        int boxY = vp.Height - boxH - 20;
+        int boxW  = vp.Width - boxMX * 2;
+        int boxX  = boxMX;
+        int boxY  = vp.Height - boxH - 20;
 
         _spriteBatch.Begin();
 
-        // Box background
         var boxRect = new Rectangle(boxX, boxY, boxW, boxH);
         LayoutDraw.Rect(_spriteBatch, boxRect, new Color(8, 8, 20, 230));
         LayoutDraw.AccentBar(_spriteBatch, boxRect);
@@ -286,116 +262,108 @@ public class DialogueBox
         if (!string.IsNullOrEmpty(SpeakerName))
         {
             var nameSize = Assets.TitleFont.MeasureString(SpeakerName);
-            int tagW = (int)nameSize.X + 24;
-            int tagH = (int)nameSize.Y + 12;
-            int tagX = boxX + 20;
-            int tagY = boxY - tagH + 2;
-
-            LayoutDraw.Rect(_spriteBatch, new Rectangle(tagX, tagY, tagW, tagH), LayoutDraw.Accent);
-            LayoutDraw.Rect(_spriteBatch, new Rectangle(tagX, tagY, tagW, 2), new Color(255, 80, 100));
+            int tagW  = (int)nameSize.X + 24;
+            int tagH  = 36;
+            int tagX  = boxX + 10;
+            int tagY  = boxY - tagH + 4;
+            var tagRect = new Rectangle(tagX, tagY, tagW, tagH);
+            LayoutDraw.Rect(_spriteBatch, tagRect, new Color(232, 0, 61));
             _spriteBatch.DrawString(Assets.TitleFont, SpeakerName,
-                new Vector2(tagX + 12, tagY + 6), Color.White);
+                new Vector2(tagX + 12, tagY + (tagH - nameSize.Y) / 2f), Color.White);
         }
 
-        // Content
-        _boxStack.Padding = 20;
-        _boxStack.Spacing = 0;
-        _boxStack.Begin(boxRect);
+        int textX = boxX + 50;
+        int textY = boxY + 24;
+        int textW = boxW - 100;
 
-        if (_showingChoice && _currentNode?.Choices.Count > 0)
-            DrawChoices(boxRect, gameTime);
-        else if (_resolvedLines.Length > 0 && _currentLine < _resolvedLines.Length)
-            DrawCurrentLine(boxRect, gameTime);
+        if (_showingChoice)
+            DrawChoices(boxX, boxY, boxW, boxH, gameTime);
+        else
+            DrawCurrentLine(textX, textY, textW, boxY, boxH, gameTime);
 
         _spriteBatch.End();
     }
 
-    private void DrawCurrentLine(Rectangle boxRect, GameTime gameTime)
+    private void DrawCurrentLine(int textX, int textY, int textW, int boxY, int boxH, GameTime gt)
     {
-        var textArea = _boxStack.ConsumeRemaining();
-        var visible = _resolvedLines[_currentLine].Substring(0, _visibleChars);
+        if (_currentNode == null || _currentNode.Lines.Count == 0) return;
 
-        LayoutDraw.TextWrapped(_spriteBatch, Assets.MenuFont, visible, textArea, Color.White, pad: 4);
+        string fullText = _currentNode.Lines[_currentLine];
+        string visible  = fullText[..Math.Min(_visibleChars, fullText.Length)];
 
-        if (_lineComplete && !IsFinished)
+        // Word-wrap
+        var wrapped = WrapText(Assets.MenuFont, visible, textW);
+        _spriteBatch.DrawString(Assets.MenuFont, wrapped,
+            new Vector2(textX, textY), new Color(220, 215, 240));
+
+        // Advance indicator (pulsing >>)
+        if (_lineComplete)
         {
-            float pulse = (float)Math.Sin(gameTime.TotalGameTime.TotalSeconds * 6f);
-            float alpha = 0.6f + pulse * 0.4f;
-            var sz = Assets.MenuFont.MeasureString(">>");
+            float pulse = (float)Math.Sin(gt.TotalGameTime.TotalSeconds * 4f) * 0.5f + 0.5f;
+            var   col   = Color.Lerp(new Color(100, 100, 140), Color.White, pulse);
             _spriteBatch.DrawString(Assets.MenuFont, ">>",
-                new Vector2(boxRect.Right - sz.X - 28, boxRect.Bottom - sz.Y - 18),
-                Color.White * alpha);
+                new Vector2(textX + textW - 30, boxY + boxH - 32), col);
         }
     }
 
-    private void DrawChoices(Rectangle boxRect, GameTime gameTime)
+    private void DrawChoices(int boxX, int boxY, int boxW, int boxH, GameTime gt)
     {
+        if (_currentNode == null) return;
         var choices = _currentNode.Choices;
-        int cx = boxRect.X + boxRect.Width / 2;
-        var mousePos = Mouse.GetState().Position;
 
-        // Prompt at top
-        var promptRect = _boxStack.Next(28);
-        LayoutDraw.TextCentre(_spriteBatch, Assets.MenuFont, "What will you do?",
-            promptRect, new Color(180, 180, 200));
-
-        _boxStack.Space(8);
-
-        // Measure choices for centering
-        int choiceH = 44;
-        int pad = 24;
-        int spacing = 16;
-
-        float totalW = 0;
-        var sizes = new Vector2[choices.Count];
-        for (int i = 0; i < choices.Count; i++)
-        {
-            sizes[i] = Assets.MenuFont.MeasureString(choices[i].Label);
-            totalW += sizes[i].X + pad * 2;
-            if (i < choices.Count - 1) totalW += spacing;
-        }
-
-        int choiceY = boxRect.Y + boxRect.Height / 2 - choiceH / 2;
-        float startX = cx - totalW / 2f;
-
-        // Rebuild choice rects each frame
         _choiceRects.Clear();
 
+        int btnW   = Math.Min(220, (boxW - 40) / Math.Max(1, choices.Count) - 10);
+        int btnH   = 44;
+        int totalW = choices.Count * (btnW + 10) - 10;
+        int startX = boxX + (boxW - totalW) / 2;
+        int btnY   = boxY + (boxH - btnH) / 2 + 10;
+
         for (int i = 0; i < choices.Count; i++)
         {
-            float cw = sizes[i].X + pad * 2;
-            var btnRect = new Rectangle((int)startX, choiceY, (int)cw, choiceH);
-            _choiceRects.Add(btnRect);
-
             bool selected = i == _choiceIndex;
-            bool hovered = btnRect.Contains(mousePos);
+            int  bx       = startX + i * (btnW + 10);
+            var  rect     = new Rectangle(bx, btnY, btnW, btnH);
+            _choiceRects.Add(rect);
 
-            var bgCol = selected ? LayoutDraw.Accent
-                      : hovered ? new Color(50, 40, 70)
-                      : new Color(30, 28, 50);
-            var textCol = selected || hovered ? Color.White : new Color(140, 130, 160);
-            var borderCol = selected ? new Color(255, 80, 100)
-                          : hovered ? new Color(120, 100, 160)
-                          : new Color(50, 48, 70);
+            var bg     = selected ? new Color(232, 0, 61) : new Color(30, 28, 50);
+            var border = selected ? new Color(255, 80, 100) : new Color(80, 75, 120);
 
-            LayoutDraw.Rect(_spriteBatch, btnRect, bgCol);
-            LayoutDraw.Rect(_spriteBatch, new Rectangle(btnRect.X, btnRect.Y, btnRect.Width, 2), borderCol);
-            LayoutDraw.Rect(_spriteBatch, new Rectangle(btnRect.X, btnRect.Y, 3, btnRect.Height),
-                selected ? new Color(255, 180, 180) : borderCol);
+            if (selected)
+            {
+                float pulse = (float)Math.Sin(gt.TotalGameTime.TotalSeconds * 5f) * 0.15f + 0.85f;
+                bg = new Color((int)(232 * pulse), 0, (int)(61 * pulse));
+            }
 
-            float pulse = (float)Math.Sin(gameTime.TotalGameTime.TotalSeconds * 5f);
-            float alpha = selected ? 0.85f + pulse * 0.15f : 1f;
+            LayoutDraw.Rect(_spriteBatch, rect, bg);
+            LayoutDraw.BorderRect(_spriteBatch, rect, border);
+            LayoutDraw.TextCentre(_spriteBatch, Assets.MenuFont, choices[i].Label, rect, Color.White);
+        }
+    }
 
-            LayoutDraw.TextCentre(_spriteBatch, Assets.MenuFont, choices[i].Label,
-                btnRect, textCol * alpha);
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+    private static string WrapText(SpriteFont font, string text, int maxWidth)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var words  = text.Split(' ');
+        var result = new System.Text.StringBuilder();
+        var line   = new System.Text.StringBuilder();
 
-            startX += cw + spacing;
+        foreach (var word in words)
+        {
+            var test = line.Length == 0 ? word : line + " " + word;
+            if (font.MeasureString(test).X > maxWidth && line.Length > 0)
+            {
+                result.AppendLine(line.ToString());
+                line.Clear();
+            }
+            if (line.Length > 0) line.Append(' ');
+            line.Append(word);
         }
 
-        // Hint at bottom
-        var hintRect = new Rectangle(boxRect.X, boxRect.Bottom - 28, boxRect.Width, 24);
-        LayoutDraw.TextCentre(_spriteBatch, Assets.MenuFont,
-            "[Left/Right] or [A/D] Select   [Enter/Click] Confirm",
-            hintRect, new Color(80, 75, 100));
+        if (line.Length > 0) result.Append(line);
+        return result.ToString();
     }
 }

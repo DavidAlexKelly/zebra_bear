@@ -9,7 +9,7 @@ namespace ZebraBear.Core;
 /// Registry of all entity builders known to the current game.
 ///
 /// The engine registers nothing here by default. The game calls
-/// ZebraBearEntities.Register() (or equivalent) at startup to populate it.
+/// ZebraBearEntities.Register() at startup to populate it.
 /// </summary>
 public static class EntityRegistry
 {
@@ -30,12 +30,12 @@ public static class EntityRegistry
     /// Build an entity from a JSON node.
     /// Returns null (with a warning) if no builder is registered for the type.
     /// </summary>
-    public static Entity Build(JsonNode node, string name, string[] dialogue)
+    public static Entity Build(JsonNode node, string name)
     {
         var type = node["type"]?.GetValue<string>() ?? "";
 
         if (_builders.TryGetValue(type, out var builder))
-            return builder.Build(node, name, dialogue);
+            return builder.Build(node, name);
 
         Console.WriteLine($"[EntityRegistry] No builder registered for type '{type}' " +
                           $"(name='{name}'). Add it to ZebraBearEntities.Register().");

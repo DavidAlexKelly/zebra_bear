@@ -16,21 +16,22 @@ namespace ZebraBear.Core;
 ///   public class PillarBuilder : IEntityBuilder
 ///   {
 ///       public string TypeName => "pillar";
-///       public Entity Build(JsonNode node, string name, string[] dialogue) { ... }
+///       public Entity Build(JsonNode node, string name) { ... }
 ///   }
 /// </summary>
 public interface IEntityBuilder
 {
     /// <summary>
     /// The value of the "type" field in rooms.json that triggers this builder.
-    /// Must be unique. E.g. "pillar", "billboard", "shelf".
+    /// Must be unique across all registered builders.
     /// </summary>
     string TypeName { get; }
 
     /// <summary>
     /// Construct and return an Entity from the JSON node.
-    /// name and dialogue are pre-parsed for convenience.
+    /// Interaction wiring (interactionId lookup) is handled by GameLoader
+    /// after this returns — builders only set geometry and physics.
     /// Return null to silently skip (e.g. unsupported platform variant).
     /// </summary>
-    Entity Build(JsonNode node, string name, string[] dialogue);
+    Entity Build(JsonNode node, string name);
 }

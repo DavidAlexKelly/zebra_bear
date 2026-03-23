@@ -10,10 +10,13 @@ public class CharacterProfile
 {
     public string    Id;
     public string    Name;
+
+    public string PortraitPath = "";
     public string    Title;
     public string[]  Bio;
     public Texture2D Portrait;
     public bool      Met;
+    
 }
 
 /// <summary>

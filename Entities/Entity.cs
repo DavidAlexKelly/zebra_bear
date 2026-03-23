@@ -1,7 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using System;
-using ZebraBear.Core;
+using ZebraBear.Scenes; // InteractionDef lives here
 
 namespace ZebraBear.Entities;
 
@@ -9,16 +8,15 @@ namespace ZebraBear.Entities;
 /// Base class for all interactive world objects.
 ///
 /// Owns:
-///   - Identity (Name, Dialogue / DialogueTree)
-///   - Interaction callback (OnInteract) — for simple cases only
+///   - Identity (Name)
+///   - Interaction — the InteractionDef authored in the editor, or null for decorative objects
 ///   - Raycasting via BoundingBox
 ///
-/// For branching dialogue, set DialogueTree instead of Dialogue.
-/// The scene's StartDialogue() method checks DialogueTree first.
-/// Legacy flat Dialogue arrays are automatically promoted to a single-node
-/// DialogueTree by GameLoader, so scenes always use DialogueTree at runtime.
-///
 /// Rendering is delegated to subclasses.
+///
+/// To make an entity interactable, assign an InteractionDef from InteractionStore.
+/// Everything else — dialogue lines, choices, navigation — is expressed in the
+/// InteractionDef and driven by DialogueBox at runtime.
 /// </summary>
 public abstract class Entity
 {
@@ -28,52 +26,30 @@ public abstract class Entity
 
     /// <summary>
     /// Display name shown in the HUD interact prompt and dialogue name tag.
-    /// Empty = not interactable (decorative only).
+    /// Empty string = not interactable (decorative only).
     /// </summary>
-    public string Name;
-
-    // -----------------------------------------------------------------------
-    // Dialogue
-    // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Legacy flat dialogue array. Kept for compatibility with code that sets
-    /// it directly. At load time, GameLoader promotes this to a DialogueTree
-    /// automatically so that scenes always use the tree path.
-    /// </summary>
-    public string[] Dialogue;
-
-    /// <summary>
-    /// Branching dialogue tree. Set directly (from dialogueTree JSON) or
-    /// promoted from flat Dialogue by GameLoader.
-    /// Scenes should use this field; fall back to Dialogue only as a last resort.
-    /// </summary>
-    public DialogueNode DialogueTree;
+    public string Name = "";
 
     // -----------------------------------------------------------------------
     // Interaction
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Optional callback fired when a top-level dialogue choice is confirmed.
-    /// Receives the choice index (0 = first option, 1 = second, etc.).
-    ///
-    /// For simple binary Yes/No interactions where a dialogue tree is overkill,
-    /// set this directly. For everything else, use DialogueTree with
-    /// onSelectActions on each choice instead.
-    ///
-    /// Cleared automatically by DialogueBox after firing.
+    /// The interaction authored in the editor and resolved via InteractionStore.
+    /// Null = no dialogue; the entity is decorative or not yet wired up.
     /// </summary>
-    public Action<int> OnInteract;
+    public InteractionDef Interaction = null;
 
     /// <summary>
-    /// True when this entity's dialogue will present a choice to the player.
-    /// Derived from the DialogueTree if present, else from OnInteract.
+    /// True when this entity will present a choice prompt to the player.
+    /// Derived from the interaction's root node.
     /// </summary>
-    public bool HasChoice =>
-        DialogueTree != null
-            ? !DialogueTree.IsLeaf
-            : OnInteract != null;
+    public bool HasChoice => Interaction != null && !Interaction.Root.IsLeaf;
+
+    /// <summary>
+    /// True when this entity can be interacted with at all.
+    /// </summary>
+    public bool IsInteractable => Interaction != null && !string.IsNullOrEmpty(Name);
 
     // -----------------------------------------------------------------------
     // Collision

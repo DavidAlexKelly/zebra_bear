@@ -18,6 +18,10 @@ namespace ZebraBear;
 ///   1. Write a class implementing IEntityBuilder below.
 ///   2. Add EntityRegistry.Register(new MyBuilder()) in Register().
 ///   3. Use the TypeName as "type" in rooms.json.
+///
+/// Builders are responsible only for geometry and physics.
+/// Interaction wiring (interactionId → InteractionDef) is handled by
+/// GameLoader after the builder returns.
 /// </summary>
 public static class ZebraBearEntities
 {
@@ -55,7 +59,7 @@ file class BillboardBuilder : IEntityBuilder
 {
     public string TypeName => "billboard";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var pos  = J.Vec3(node["position"]);
         var tint = J.Color(node["tint"]) ?? Color.White;
@@ -79,7 +83,6 @@ file class BillboardBuilder : IEntityBuilder
             Tint        = tint,
             IsCharacter = isC,
             Sprite      = sprite,
-            Dialogue    = dialogue
         };
     }
 }
@@ -91,13 +94,13 @@ file class BillboardBuilder : IEntityBuilder
 /// <summary>
 /// Box flush against a wall, facing a given normal.
 ///
-/// JSON: centre, width, height, depth, normal, tint, solid, onInteract
+/// JSON: centre, width, height, depth, normal, tint, solid
 /// </summary>
 file class OrientedBoxBuilder : IEntityBuilder
 {
     public string TypeName => "orientedBox";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var centre = J.Vec3(node["centre"]);
         float w    = node["width"]?.GetValue<float>()  ?? 1f;
@@ -107,13 +110,8 @@ file class OrientedBoxBuilder : IEntityBuilder
         var tint   = J.Color(node["tint"]) ?? new Color(100, 100, 100);
         var normal = J.Normal(node["normal"]?.GetValue<string>());
 
-        var entity = MeshEntity.CreateOrientedBox(name, dialogue, centre, w, h, normal, tint, d);
+        var entity = MeshEntity.CreateOrientedBox(name, centre, w, h, normal, tint, d);
         entity.Solid = solid;
-
-        var interact = node["onInteract"];
-        if (interact != null)
-            entity.OnInteract = InteractCallbackBuilder.Build(interact);
-
         return entity;
     }
 }
@@ -131,7 +129,7 @@ file class BoxBuilder : IEntityBuilder
 {
     public string TypeName => "box";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var min    = J.Vec3(node["min"]);
         var max    = J.Vec3(node["max"]);
@@ -139,7 +137,7 @@ file class BoxBuilder : IEntityBuilder
         var bottom = J.Color(node["bottom"]) ?? new Color(80,  60,  40);
         var side   = J.Color(node["side"])   ?? new Color(130, 100, 70);
 
-        return MeshEntity.CreateBox(name, dialogue, min, max, top, bottom, side);
+        return MeshEntity.CreateBox(name, min, max, top, bottom, side);
     }
 }
 
@@ -156,7 +154,7 @@ file class TableBuilder : IEntityBuilder
 {
     public string TypeName => "table";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var pos  = J.Vec3(node["position"]);
         float w  = node["width"]?.GetValue<float>()  ?? 2f;
@@ -164,7 +162,7 @@ file class TableBuilder : IEntityBuilder
         float h  = node["height"]?.GetValue<float>() ?? 1f;
         var tint = J.Color(node["tint"]) ?? new Color(120, 85, 55);
 
-        return MeshEntity.CreateTable(name, dialogue, pos, w, d, h, tint);
+        return MeshEntity.CreateTable(name, pos, w, d, h, tint);
     }
 }
 
@@ -181,7 +179,7 @@ file class ChairBuilder : IEntityBuilder
 {
     public string TypeName => "chair";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var pos       = J.Vec3(node["position"]);
         float w       = node["width"]?.GetValue<float>()   ?? 0.9f;
@@ -197,7 +195,7 @@ file class ChairBuilder : IEntityBuilder
             new Vector3(pos.X - w / 2f, pos.Y,        pos.Z - d / 2f),
             new Vector3(pos.X + w / 2f, pos.Y + topH, pos.Z + d / 2f));
 
-        return new MeshEntity(name, dialogue, verts, idx, bounds);
+        return new MeshEntity(name, verts, idx, bounds);
     }
 }
 
@@ -214,7 +212,7 @@ file class ShelfBuilder : IEntityBuilder
 {
     public string TypeName => "shelf";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var centre = J.Vec3(node["centre"]);
         float w    = node["width"]?.GetValue<float>()  ?? 2f;
@@ -225,7 +223,7 @@ file class ShelfBuilder : IEntityBuilder
         (VertexPositionColor[] verts, short[] idx) = MeshBuilder.Shelf(centre, w, d, normal, tint);
         var bounds = MeshBuilder.BoundsForOrientedBox(centre, w, 0.12f, normal, d);
 
-        return new MeshEntity(name, dialogue, verts, idx, bounds);
+        return new MeshEntity(name, verts, idx, bounds);
     }
 }
 
@@ -242,7 +240,7 @@ file class PillarBuilder : IEntityBuilder
 {
     public string TypeName => "pillar";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var pos  = J.Vec3(node["position"]);
         float w  = node["width"]?.GetValue<float>()  ?? 0.6f;
@@ -263,7 +261,7 @@ file class PillarBuilder : IEntityBuilder
             (int)(tint.B * 0.6f));
 
         (VertexPositionColor[] verts, short[] idx) = MeshBuilder.Box(min, max, top, bottom, tint);
-        var entity = new MeshEntity(name, dialogue, verts, idx, new BoundingBox(min, max));
+        var entity = new MeshEntity(name, verts, idx, new BoundingBox(min, max));
         entity.Solid = true;
         return entity;
     }
@@ -276,34 +274,18 @@ file class PillarBuilder : IEntityBuilder
 /// <summary>
 /// Loads a Wavefront OBJ file at runtime and creates a MeshEntity from it.
 ///
-/// OBJ files exported by ZebraBear's ObjExporter/ModelExporter carry vertex
-/// colour comments and render with the original colours. External OBJ files
-/// (from Blender, Kenney, etc.) use the "tint" field as a flat colour.
-///
 /// JSON fields:
 ///   model     string       path relative to executable, e.g. "Data/Models/crate.obj"
 ///   position  [x, y, z]   world offset applied to all vertices (default zero)
 ///   scale     float        uniform scale (default 1.0)
 ///   tint      [r, g, b]   fallback colour if the OBJ has no vertex colours
 ///   solid     bool         default true
-///   onInteract             standard interact node
-///
-/// Example:
-///   {
-///     "type": "obj",
-///     "name": "Crate",
-///     "model": "Data/Models/box_crate.obj",
-///     "position": [2.0, 0.0, -5.0],
-///     "scale": 1.0,
-///     "tint": [180, 140, 100],
-///     "dialogue": ["A wooden crate."]
-///   }
 /// </summary>
 file class ObjEntityBuilder : IEntityBuilder
 {
     public string TypeName => "obj";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         var modelPath = node["model"]?.GetValue<string>()
             ?? throw new Exception($"[ObjEntityBuilder] 'model' path is required (entity '{name}')");
@@ -324,13 +306,8 @@ file class ObjEntityBuilder : IEntityBuilder
         }
 
         var bounds = ObjLoader.ComputeBounds(verts);
-        var entity = new MeshEntity(name, dialogue, verts, idx, bounds);
+        var entity = new MeshEntity(name, verts, idx, bounds);
         entity.Solid = solid;
-
-        var interact = node["onInteract"];
-        if (interact != null)
-            entity.OnInteract = InteractCallbackBuilder.Build(interact);
-
         return entity;
     }
 }
@@ -342,39 +319,23 @@ file class ObjEntityBuilder : IEntityBuilder
 /// <summary>
 /// Loads a compiled FBX or X model from the MonoGame content pipeline.
 ///
-/// Prerequisites:
-///   1. Add the model to Content.mgcb (Importer: FbxImporter, Processor: ModelProcessor).
-///   2. Set ZebraBearEntities.Content = Content in Game.LoadContent().
-///
 /// JSON fields:
 ///   model     string       Content-relative path without extension, e.g. "Models/crate"
 ///   position  [x, y, z]   world offset (default zero)
 ///   scale     float        uniform scale (default 1.0)
 ///   tint      [r, g, b]   flat tint when the model has no vertex colours
 ///   solid     bool         default true
-///   onInteract             standard interact node
-///
-/// Example:
-///   {
-///     "type": "fbx",
-///     "name": "Barrel",
-///     "model": "Models/barrel",
-///     "position": [-3.0, 0.0, -8.0],
-///     "tint": [120, 85, 55],
-///     "dialogue": ["A wooden barrel."]
-///   }
 /// </summary>
 file class FbxEntityBuilder : IEntityBuilder
 {
     public string TypeName => "fbx";
 
-    public Entity Build(JsonNode node, string name, string[] dialogue)
+    public Entity Build(JsonNode node, string name)
     {
         if (ZebraBearEntities.Content == null)
             throw new Exception(
                 "[FbxEntityBuilder] ZebraBearEntities.Content is null. " +
-                "Add 'ZebraBearEntities.Content = Content;' in Game.LoadContent() " +
-                "before calling ZebraBearEntities.Register().");
+                "Add 'ZebraBearEntities.Content = Content;' in Game.LoadContent().");
 
         var modelPath = node["model"]?.GetValue<string>()
             ?? throw new Exception($"[FbxEntityBuilder] 'model' path is required (entity '{name}')");
@@ -392,17 +353,11 @@ file class FbxEntityBuilder : IEntityBuilder
                 verts[i] = new VertexPositionColor(
                     verts[i].Position * scale + pos,
                     verts[i].Color);
-
             bounds = ObjLoader.ComputeBounds(verts);
         }
 
-        var entity = new MeshEntity(name, dialogue, verts, idx, bounds);
+        var entity = new MeshEntity(name, verts, idx, bounds);
         entity.Solid = solid;
-
-        var interact = node["onInteract"];
-        if (interact != null)
-            entity.OnInteract = InteractCallbackBuilder.Build(interact);
-
         return entity;
     }
 }
@@ -433,12 +388,14 @@ file static class J
             a[2]!.GetValue<int>());
     }
 
-    public static Vector3 Normal(string s) => s switch
+    public static Vector3 Normal(string s) => s?.ToLower() switch
     {
-        "north" => MeshBuilder.FaceNorth,
-        "south" => MeshBuilder.FaceSouth,
-        "east"  => MeshBuilder.FaceEast,
-        "west"  => MeshBuilder.FaceWest,
-        _       => MeshBuilder.FaceNorth
+        "north" => -Vector3.UnitZ,
+        "south" =>  Vector3.UnitZ,
+        "east"  =>  Vector3.UnitX,
+        "west"  => -Vector3.UnitX,
+        "up"    =>  Vector3.UnitY,
+        "down"  => -Vector3.UnitY,
+        _       =>  Vector3.UnitZ
     };
 }

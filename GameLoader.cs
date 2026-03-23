@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Nodes;
 using ZebraBear.Entities;
+using ZebraBear.Scenes;
 
 namespace ZebraBear.Core;
 
@@ -52,46 +53,46 @@ public static class GameLoader
             Console.WriteLine($"[GameLoader] WARNING: {path} not found — using empty character list.");
             return;
         }
-
+ 
         var root  = JsonNode.Parse(File.ReadAllText(path));
         var array = root!["characters"]!.AsArray();
-
+ 
         CharacterData.Characters.Clear();
-
+ 
         foreach (var node in array)
         {
             var id       = node!["id"]!.GetValue<string>();
             var name     = node["name"]!.GetValue<string>();
             var title    = node["title"]!.GetValue<string>();
             var met      = node["met"]?.GetValue<bool>() ?? false;
-            var portrait = node["portrait"]?.GetValue<string>();
-
+            var portrait = node["portrait"]?.GetValue<string>() ?? "";
+ 
             var bioArray = node["bio"]?.AsArray();
             var bio      = new List<string>();
             if (bioArray != null)
                 foreach (var b in bioArray) bio.Add(b!.GetValue<string>());
-
+ 
             Texture2D tex = null;
             if (!string.IsNullOrEmpty(portrait))
             {
                 try   { tex = content.Load<Texture2D>(portrait); }
                 catch { Console.WriteLine($"[GameLoader] Could not load portrait: {portrait}"); }
             }
-
+ 
             CharacterData.Characters.Add(new CharacterProfile
             {
-                Id       = id,
-                Name     = name,
-                Title    = title,
-                Bio      = bio.ToArray(),
-                Portrait = tex,
-                Met      = met
+                Id          = id,
+                Name        = name,
+                Title       = title,
+                Bio         = bio.ToArray(),
+                Portrait    = tex,
+                PortraitPath = portrait,   // ← store the path for later use
+                Met         = met
             });
         }
-
+ 
         Console.WriteLine($"[GameLoader] Loaded {CharacterData.Characters.Count} character(s).");
     }
-
     // -----------------------------------------------------------------------
     // Map
     // -----------------------------------------------------------------------
@@ -161,51 +162,105 @@ public static class GameLoader
     /// </summary>
     public static void LoadRoom(string roomId, Room room)
     {
-        // Check for level override first
         var path = LevelData._levelRoomsOverride != null && File.Exists(LevelData._levelRoomsOverride)
             ? LevelData._levelRoomsOverride
             : DataPath("rooms.json");
-
+ 
         if (!File.Exists(path))
         {
             Console.WriteLine($"[GameLoader] WARNING: {path} not found.");
             return;
         }
-
+ 
         var root = JsonNode.Parse(File.ReadAllText(path));
-        var roomsArr = root!["rooms"]!.AsArray();
-        JsonNode roomNode = null;
-
-        foreach (var r in roomsArr)
+ 
+        // ---- Populate InteractionStore from the level's interactions array ----
+        // This must happen before BuildEntity runs, since entities reference
+        // interactions by ID and we need the store to be populated to resolve them.
+        var interactionsArr = root!["interactions"]?.AsArray();
+        if (interactionsArr != null)
         {
-            if (r!["id"]!.GetValue<string>() == roomId) { roomNode = r; break; }
+            foreach (var node in interactionsArr)
+            {
+                var def = DeserialiseInteractionDef(node!);
+                // Only add if not already in the store (LoadRoom may be called
+                // multiple times for different rooms in the same level).
+                if (InteractionStore.FindById(def.Id) == null)
+                    InteractionStore.Interactions.Add(def);
+            }
         }
-
+ 
+        // ---- Find the matching room ----
+        var roomsArr = root["rooms"]!.AsArray();
+        JsonNode roomNode = null;
+        foreach (var r in roomsArr)
+            if (r!["id"]!.GetValue<string>() == roomId) { roomNode = r; break; }
+ 
         if (roomNode == null)
         {
-            Console.WriteLine($"[GameLoader] WARNING: room '{roomId}' not found in rooms.json.");
+            Console.WriteLine($"[GameLoader] WARNING: room '{roomId}' not found.");
             return;
         }
-
+ 
         var entitiesArr = roomNode["entities"]?.AsArray();
         if (entitiesArr == null)
         {
             Console.WriteLine($"[GameLoader] Room '{roomId}' has no entities array — room will be empty.");
             return;
         }
-
+ 
         int count = 0;
         foreach (var node in entitiesArr)
         {
             var entity = BuildEntity(node!);
-            if (entity != null)
+            if (entity != null) { room.Add(entity); count++; }
+        }
+ 
+        Console.WriteLine($"[GameLoader] Loaded {count} entity(s) into room '{roomId}'.");
+    }
+ 
+    // -----------------------------------------------------------------------
+    // Interaction deserialisation
+    // -----------------------------------------------------------------------
+    private static InteractionDef DeserialiseInteractionDef(JsonNode node)
+    {
+        var def  = new InteractionDef();
+        def.Id   = node["id"]?.GetValue<string>()   ?? def.Id;
+        def.Name = node["name"]?.GetValue<string>() ?? "";
+        def.Root = node["root"] != null
+            ? DeserialiseInteractionNode(node["root"]!)
+            : new InteractionNode();
+        return def;
+    }
+ 
+    private static InteractionNode DeserialiseInteractionNode(JsonNode node)
+    {
+        var n  = new InteractionNode();
+        n.Id   = node["id"]?.GetValue<string>() ?? n.Id;
+        n.NavigateTarget = node["navigateTarget"]?.GetValue<string>();
+ 
+        var linesArr = node["lines"]?.AsArray();
+        if (linesArr != null)
+            foreach (var line in linesArr)
+                n.Lines.Add(line!.GetValue<string>());
+ 
+        var choicesArr = node["choices"]?.AsArray();
+        if (choicesArr != null)
+        {
+            foreach (var choiceNode in choicesArr)
             {
-                room.Add(entity);
-                count++;
+                var choice = new InteractionChoice
+                {
+                    Label          = choiceNode!["label"]?.GetValue<string>() ?? "?",
+                    NavigateTarget = choiceNode["navigateTarget"]?.GetValue<string>()
+                };
+                if (choiceNode["next"] != null)
+                    choice.Next = DeserialiseInteractionNode(choiceNode["next"]!);
+                n.Choices.Add(choice);
             }
         }
-
-        Console.WriteLine($"[GameLoader] Loaded {count} entity(s) into room '{roomId}'.");
+ 
+        return n;
     }
 
     // -----------------------------------------------------------------------
@@ -242,38 +297,31 @@ public static class GameLoader
     // -----------------------------------------------------------------------
 
     private static Entity BuildEntity(JsonNode node)
-    {
-        var name     = node["name"]?.GetValue<string>() ?? "";
-        var dialogue = ReadStringArray(node["dialogue"]);
-
-        // Dispatch to the registered builder for this type
-        var entity = EntityRegistry.Build(node, name, dialogue);
-        if (entity == null) return null;
-
-        // ---- Dialogue promotion ----
-        // If the entity has a full dialogueTree in JSON, parse it.
-        // Otherwise, promote the flat dialogue array to a linear tree.
-        // This means scenes always work with DialogueTree at runtime.
-        var treeNode = node["dialogueTree"];
-        if (treeNode != null)
-            entity.DialogueTree = DialogueTreeParser.Parse(treeNode);
-        else if (dialogue != null && dialogue.Length > 0)
-            entity.DialogueTree = DialogueTreeParser.FromFlatLines(dialogue);
-
-        // ---- Top-level onInteract (legacy / simple shorthand) ----
-        // For entities that don't use dialogueTree choices.
-        // Entity builders (e.g. OrientedBoxBuilder) also read this — this
-        // re-reads it here only for entities whose builder didn't handle it.
-        if (entity.OnInteract == null)
         {
-            var interact = node["onInteract"];
-            if (interact != null)
-                entity.OnInteract = InteractCallbackBuilder.Build(interact);
+            var name = node["name"]?.GetValue<string>() ?? "";
+    
+            // Dispatch to the registered builder for this entity's type.
+            var entity = EntityRegistry.Build(node, name);
+            if (entity == null) return null;
+    
+            // ---- Interaction wiring ----
+            // Entities reference an InteractionDef by ID. The InteractionStore is
+            // populated when the level file is loaded (LoadMap / LoadLevel).
+            // We look up the def here and assign it directly — no JSON parsing,
+            // no delegate compilation.
+            var interactionId = node["interactionId"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(interactionId))
+            {
+                var interaction = InteractionStore.FindById(interactionId);
+                if (interaction != null)
+                    entity.Interaction = interaction;
+                else
+                    Console.WriteLine($"[GameLoader] Warning: entity '{name}' references unknown interactionId '{interactionId}'.");
+            }
+    
+            return entity;
         }
-
-        return entity;
-    }
-
+ 
     // -----------------------------------------------------------------------
     // JSON helpers
     // -----------------------------------------------------------------------

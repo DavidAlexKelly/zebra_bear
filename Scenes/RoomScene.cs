@@ -133,28 +133,23 @@ public class RoomScene : IScene
 
     private void StartDialogue(Entity entity)
     {
+        if (entity.Interaction == null) return;
+ 
         _dialogueBox.SpeakerName = entity.Name;
-        if (entity.DialogueTree != null)
-        {
-            _dialogueBox.OnChoice = entity.OnInteract;
-            _dialogueBox.StartDialogue(entity.DialogueTree);
-        }
-        else if (entity.Dialogue != null)
-        {
-            _dialogueBox.OnChoice = entity.HasChoice ? entity.OnInteract : null;
-            _dialogueBox.StartDialogue(entity.Dialogue,
-                choices: entity.HasChoice ? new[] { "Yes", "No" } : null);
-        }
+        _dialogueBox.StartDialogue(entity.Interaction);
         _dialogueActive = true;
+ 
         if (entity is BillboardEntity bb && bb.Sprite != null)
         {
             _activeSpeaker = bb;
             _activeSpeaker.ActiveSpeaker = true;
             _portrait.Show(bb.Sprite);
         }
+ 
         if (!string.IsNullOrEmpty(entity.Name))
             CharacterData.SetMet(entity.Name);
     }
+ 
 
     public void Draw(GameTime gameTime)
     {

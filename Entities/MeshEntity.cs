@@ -16,22 +16,6 @@ namespace ZebraBear.Entities;
 ///
 /// To add a new shape, add a factory here that calls MeshBuilder.
 /// No other files need to change.
-///
-/// Usage — freestanding:
-///   _room.Add(MeshEntity.CreateTable("Table", dialogue,
-///       position: new Vector3(0, -3, 0),
-///       w: 2.8f, d: 1.4f, h: 1.1f,
-///       tint: new Color(120, 85, 55)));
-///
-/// Usage — wall mounted:
-///   var door = MeshEntity.CreateOrientedBox("Door", dialogue,
-///       centre:  new Vector3(13.9f, 0f, -4f),
-///       w: 2.2f, h: 3.2f,
-///       normal:  MeshBuilder.FaceEast,
-///       tint:    new Color(90, 65, 45),
-///       depth:   0.25f);
-///   door.OnInteract = (result) => { if (result == 0) game.GoToRoom2(); };
-///   _room.Add(door);
 /// </summary>
 public class MeshEntity : Entity
 {
@@ -43,18 +27,17 @@ public class MeshEntity : Entity
     // Constructor — prefer the factory methods below
     // -----------------------------------------------------------------------
 
-    public MeshEntity(string name, string[] dialogue,
+    public MeshEntity(string name,
         VertexPositionColor[] verts, short[] idx,
         BoundingBox bounds,
         int highlightBoost = 50)
     {
         Name            = name;
-        Dialogue        = dialogue;
         _verts          = verts;
         _idx            = idx;
         _bounds         = bounds;
         _highlightBoost = highlightBoost;
-        Solid           = true;  // mesh objects block the player by default
+        Solid           = true; // mesh objects block the player by default
     }
 
     // -----------------------------------------------------------------------
@@ -98,12 +81,12 @@ public class MeshEntity : Entity
     /// Use for crates, pillars, shelves, or anything box-shaped that
     /// sits flat in the world.
     /// </summary>
-    public static MeshEntity CreateBox(string name, string[] dialogue,
+    public static MeshEntity CreateBox(string name,
         Vector3 min, Vector3 max,
         Color top, Color bottom, Color side)
     {
         var (verts, idx) = MeshBuilder.Box(min, max, top, bottom, side);
-        return new MeshEntity(name, dialogue, verts, idx, new BoundingBox(min, max));
+        return new MeshEntity(name, verts, idx, new BoundingBox(min, max));
     }
 
     /// <summary>
@@ -114,20 +97,20 @@ public class MeshEntity : Entity
     /// for an object on the right wall. Any normalised Vector3 works for
     /// non-axis-aligned placements.
     /// </summary>
-    public static MeshEntity CreateOrientedBox(string name, string[] dialogue,
+    public static MeshEntity CreateOrientedBox(string name,
         Vector3 centre, float w, float h, Vector3 normal,
         Color tint, float depth = 0.3f)
     {
         var (verts, idx) = MeshBuilder.OrientedBox(centre, w, h, normal, tint, depth);
         var bounds       = MeshBuilder.BoundsForOrientedBox(centre, w, h, normal, depth);
-        return new MeshEntity(name, dialogue, verts, idx, bounds);
+        return new MeshEntity(name, verts, idx, bounds);
     }
 
     /// <summary>
     /// Freestanding table with a top slab and four legs.
     /// position = centre of the base at floor level.
     /// </summary>
-    public static MeshEntity CreateTable(string name, string[] dialogue,
+    public static MeshEntity CreateTable(string name,
         Vector3 position, float w, float d, float h, Color tint)
     {
         var (verts, idx) = MeshBuilder.Table(position, w, d, h, tint);
@@ -135,6 +118,6 @@ public class MeshEntity : Entity
         var bounds = new BoundingBox(
             new Vector3(position.X - hw, position.Y,     position.Z - hd),
             new Vector3(position.X + hw, position.Y + h, position.Z + hd));
-        return new MeshEntity(name, dialogue, verts, idx, bounds);
+        return new MeshEntity(name, verts, idx, bounds);
     }
 }

@@ -7,10 +7,37 @@
     <UseKerning>true</UseKerning>
     <Style>Regular</Style>
     <CharacterRegions>
+
+      <!-- Basic ASCII (32–126) -->
       <CharacterRegion>
         <Start>&#32;</Start>
         <End>&#126;</End>
       </CharacterRegion>
+
+      <!-- Latin-1 Supplement (160–255): accented chars, common symbols -->
+      <CharacterRegion>
+        <Start>&#160;</Start>
+        <End>&#255;</End>
+      </CharacterRegion>
+
+      <!-- General Punctuation: en dash, em dash, curly quotes, ellipsis, bullet -->
+      <CharacterRegion>
+        <Start>&#8192;</Start>
+        <End>&#8230;</End>
+      </CharacterRegion>
+
+      <!-- Arrows: ←↑→↓ and a few extras -->
+      <CharacterRegion>
+        <Start>&#8592;</Start>
+        <End>&#8599;</End>
+      </CharacterRegion>
+
+      <!-- Checkmark ✓ and cross ✗ -->
+      <CharacterRegion>
+        <Start>&#10003;</Start>
+        <End>&#10007;</End>
+      </CharacterRegion>
+
     </CharacterRegions>
   </Asset>
 </XnaContent>

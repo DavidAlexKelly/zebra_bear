@@ -134,100 +134,203 @@ public static class LevelData
     // -----------------------------------------------------------------------
     // Publishing
     // -----------------------------------------------------------------------
+    
     public static string Publish(string levelName, List<PublishRoom> rooms,
         List<PublishConnection> connections, int canvasX, int canvasY, int canvasW, int canvasH)
     {
         Directory.CreateDirectory(LevelsDir);
         var sanitized = SanitizeFileName(levelName);
-        var fileName = sanitized + ".json";
-        var path = Path.Combine(LevelsDir, fileName);
-
+        var fileName  = sanitized + ".json";
+        var path      = Path.Combine(LevelsDir, fileName);
+ 
         var root = new JsonObject();
-        root["name"] = levelName;
-        root["author"] = "Player";
+        root["name"]      = levelName;
+        root["author"]    = "Player";
         root["createdAt"] = DateTime.Now.ToString("o");
-
-        // Map
+ 
+        // ---- Map ----
         var map = new JsonObject();
         map["startRoom"] = rooms.Count > 0 ? rooms[0].Id : "";
         var mapRooms = new JsonArray();
         foreach (var r in rooms)
         {
             var rn = new JsonObject();
-            rn["id"] = r.Id; rn["label"] = r.Label; rn["sceneType"] = "box";
-            rn["position"] = new JsonArray((r.CanvasX - canvasX) / (float)canvasW, (r.CanvasY - canvasY) / (float)canvasH);
-            rn["size"] = new JsonArray(r.CanvasW / (float)canvasW, r.CanvasH / (float)canvasH);
+            rn["id"]        = r.Id;
+            rn["label"]     = r.Label;
+            rn["sceneType"] = "box";
+            rn["position"]  = new JsonArray(
+                (r.CanvasX - canvasX) / (float)canvasW,
+                (r.CanvasY - canvasY) / (float)canvasH);
+            rn["size"]       = new JsonArray(r.CanvasW / (float)canvasW, r.CanvasH / (float)canvasH);
             rn["discovered"] = false;
             mapRooms.Add(rn);
         }
         map["rooms"] = mapRooms;
         var mapConns = new JsonArray();
-        foreach (var c in connections) { var cn = new JsonObject(); cn["fromId"] = c.FromId; cn["toId"] = c.ToId; mapConns.Add(cn); }
+        foreach (var c in connections)
+        {
+            var cn = new JsonObject();
+            cn["fromId"] = c.FromId;
+            cn["toId"]   = c.ToId;
+            mapConns.Add(cn);
+        }
         map["connections"] = mapConns;
         root["map"] = map;
-
-        // Rooms with entities
+ 
+        // ---- Interactions (top-level, referenced by ID) ----
+        // Collect every InteractionDef actually used by any entity in the level.
+        var usedIds = new HashSet<string>();
+        foreach (var r in rooms)
+        {
+            foreach (var obj in r.Objects)
+                if (!string.IsNullOrEmpty(obj.InteractionId)) usedIds.Add(obj.InteractionId);
+            foreach (var ch in r.Characters)
+                if (!string.IsNullOrEmpty(ch.InteractionId)) usedIds.Add(ch.InteractionId);
+        }
+ 
+        var interactionsArr = new JsonArray();
+        foreach (var id in usedIds)
+        {
+            var def = InteractionStore.FindById(id);
+            if (def == null) continue;
+            interactionsArr.Add(SerialiseInteractionDef(def));
+        }
+        root["interactions"] = interactionsArr;
+ 
+        // ---- Rooms with entities ----
         var roomsArr = new JsonArray();
         foreach (var r in rooms)
         {
             var rn = new JsonObject();
-            rn["id"] = r.Id; rn["label"] = r.Label;
-            rn["wallColor"] = new JsonArray(30, 28, 45);
+            rn["id"]         = r.Id;
+            rn["label"]      = r.Label;
+            rn["wallColor"]  = new JsonArray(30, 28, 45);
             rn["floorColor"] = new JsonArray(20, 18, 30);
-            rn["ceilColor"] = new JsonArray(12, 10, 20);
-
+            rn["ceilColor"]  = new JsonArray(12, 10, 20);
+ 
             var entities = new JsonArray();
-
-            // Objects
+ 
             foreach (var obj in r.Objects)
             {
-                var entity = new JsonObject();
+                var entity  = new JsonObject();
                 entity["type"] = obj.Type;
                 entity["name"] = obj.Type;
                 float wx = (obj.Col - 10) * 1.4f, wz = (obj.Row - 10) * 1.4f;
-
+ 
                 if (obj.Type == "orientedBox" || obj.Type == "shelf")
-                { entity["centre"] = new JsonArray(wx, 0f, wz); entity["width"] = 2f; entity["height"] = 1.5f; entity["depth"] = 0.2f; entity["normal"] = "north"; entity["tint"] = new JsonArray(100, 80, 60); }
+                {
+                    entity["centre"] = new JsonArray(wx, 0f, wz);
+                    entity["width"]  = 2f;
+                    entity["height"] = 1.5f;
+                    entity["depth"]  = 0.2f;
+                    entity["normal"] = "north";
+                    entity["tint"]   = new JsonArray(100, 80, 60);
+                }
                 else
-                { entity["position"] = new JsonArray(wx, -3f, wz); entity["tint"] = new JsonArray(100, 80, 60); }
-
-                var interaction = InteractionStore.FindById(obj.InteractionId);
-                if (interaction != null)
-                    entity["dialogueTree"] = BuildDialogueTreeJson(interaction.Root, rooms);
-
+                {
+                    entity["position"] = new JsonArray(wx, -3f, wz);
+                    entity["tint"]     = new JsonArray(100, 80, 60);
+                }
+ 
+                if (!string.IsNullOrEmpty(obj.InteractionId))
+                    entity["interactionId"] = obj.InteractionId;
+ 
                 entities.Add(entity);
             }
-
-            // Characters
+ 
             foreach (var ch in r.Characters)
             {
                 var entity = new JsonObject();
-                entity["type"] = "billboard";
-                entity["name"] = ch.Name;
+                entity["type"]        = "billboard";
+                entity["name"]        = ch.Name;
                 float wx = (ch.Col - 10) * 1.4f, wz = (ch.Row - 10) * 1.4f;
-                entity["position"] = new JsonArray(wx, -0.75f, wz);
-                entity["width"] = 2.2f; entity["height"] = 4.5f;
-                entity["tint"] = new JsonArray(ch.TintR, ch.TintG, ch.TintB);
+                entity["position"]    = new JsonArray(wx, -0.75f, wz);
+                entity["width"]       = 2.2f;
+                entity["height"]      = 4.5f;
+                entity["tint"]        = new JsonArray(ch.TintR, ch.TintG, ch.TintB);
                 entity["isCharacter"] = true;
-
-                var interaction = InteractionStore.FindById(ch.InteractionId);
-                if (interaction != null)
-                    entity["dialogueTree"] = BuildDialogueTreeJson(interaction.Root, rooms);
-
+ 
+                if (!string.IsNullOrEmpty(ch.InteractionId))
+                    entity["interactionId"] = ch.InteractionId;
+ 
                 entities.Add(entity);
             }
-
+ 
             rn["entities"] = entities;
             roomsArr.Add(rn);
         }
         root["rooms"] = roomsArr;
-        root["characters"] = new JsonArray();
-
+ 
+        // ---- Characters (self-contained so BillboardBuilder can find portraits) ----
+        var charsArr = new JsonArray();
+        foreach (var c in CharacterData.Characters)
+        {
+            var cn = new JsonObject();
+            cn["id"]    = c.Id    ?? "";
+            cn["name"]  = c.Name  ?? "";
+            cn["title"] = c.Title ?? "";
+            cn["met"]   = false; // always start unmet on a fresh play
+ 
+            var bio = new JsonArray();
+            if (c.Bio != null) foreach (var line in c.Bio) bio.Add(line);
+            cn["bio"] = bio;
+ 
+            if (!string.IsNullOrWhiteSpace(c.PortraitPath))
+                cn["portrait"] = c.PortraitPath;
+ 
+            charsArr.Add(cn);
+        }
+        root["characters"] = charsArr;
+ 
         File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"[LevelData] Published '{levelName}' -> {path}");
         return fileName;
     }
+ 
 
+    // -----------------------------------------------------------------------
+    // Interaction serialisation
+    // -----------------------------------------------------------------------
+ 
+    private static JsonObject SerialiseInteractionDef(InteractionDef def)
+        {
+            var obj = new JsonObject();
+            obj["id"]   = def.Id;
+            obj["name"] = def.Name;
+            obj["root"] = SerialiseInteractionNode(def.Root);
+            return obj;
+        }
+    
+        private static JsonObject SerialiseInteractionNode(InteractionNode node)
+        {
+            var obj = new JsonObject();
+            obj["id"] = node.Id;
+    
+            var lines = new JsonArray();
+            foreach (var line in node.Lines) lines.Add(line);
+            obj["lines"] = lines;
+    
+            if (!string.IsNullOrEmpty(node.NavigateTarget))
+                obj["navigateTarget"] = node.NavigateTarget;
+    
+            if (node.Choices.Count > 0)
+            {
+                var choices = new JsonArray();
+                foreach (var choice in node.Choices)
+                {
+                    var cn = new JsonObject();
+                    cn["label"] = choice.Label;
+                    if (!string.IsNullOrEmpty(choice.NavigateTarget))
+                        cn["navigateTarget"] = choice.NavigateTarget;
+                    if (choice.Next != null)
+                        cn["next"] = SerialiseInteractionNode(choice.Next);
+                    choices.Add(cn);
+                }
+                obj["choices"] = choices;
+            }
+    
+            return obj;
+        }
     private static JsonObject BuildDialogueTreeJson(InteractionNode node, List<PublishRoom> rooms)
     {
         var tree = new JsonObject();
