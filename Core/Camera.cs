@@ -7,16 +7,16 @@ namespace ZebraBear;
 public class Camera
 {
     public Vector3 Position;
-    public float Yaw   = 0f;
-    public float Pitch = 0f;
+    public float   Yaw   = 0f;
+    public float   Pitch = 0f;
 
-    public float MoveSpeed  = 4f;
-    public float LookSpeed  = 0.002f;
+    public float MoveSpeed = 4f;
+    public float LookSpeed = 0.002f;
 
     private const float MaxPitch = 1.4f;
 
-    private int _centerX;
-    private int _centerY;
+    private int   _centerX;
+    private int   _centerY;
     private float _aspect;
 
     // Forward includes pitch — used for looking and raycasting
@@ -49,7 +49,15 @@ public class Camera
         _centerY = h / 2;
     }
 
-    public void Update(GameTime gameTime, bool captureMouse)
+    /// <summary>
+    /// Update camera — mouse look, movement, collision resolution, room clamp.
+    ///
+    /// resolveCollisions: optional delegate from Room.ResolveCollisions.
+    /// Pass it to prevent the player walking through solid entities:
+    ///   _camera.Update(gameTime, captureMouse: true, _room.ResolveCollisions);
+    /// </summary>
+    public void Update(GameTime gameTime, bool captureMouse,
+        Func<Vector3, Vector3> resolveCollisions = null)
     {
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         var   kb = Keyboard.GetState();
@@ -84,7 +92,12 @@ public class Camera
                 : MoveSpeed;
             Position += move * speed * dt;
         }
-        // Clamp inside room bounds
+
+        // --- Collision resolution — push out of solid entities ---
+        if (resolveCollisions != null)
+            Position = resolveCollisions(Position);
+
+        // --- Clamp inside room bounds ---
         Position.X = Math.Clamp(Position.X, -13f, 13f);
         Position.Z = Math.Clamp(Position.Z, -13f, 13f);
         Position.Y = 0f;

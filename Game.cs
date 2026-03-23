@@ -1,22 +1,23 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using ZebraBear.Core;
+using ZebraBear.Scenes;
 
 namespace ZebraBear;
-
-public enum Scene { MainMenu, Game, Paused, Room2 }
 
 public class Game : Microsoft.Xna.Framework.Game
 {
     private GraphicsDeviceManager _graphics;
     private SpriteBatch           _spriteBatch;
-    private Scene                 _currentScene    = Scene.MainMenu;
-    private Scene                 _prePauseScene   = Scene.Game;
 
-    private MainMenuScene _mainMenu;
+    private SceneManager _scenes;
+    private PauseMenu    _pauseMenu;
+
+    // Scenes — created once, reused
+    private MainMenuScene _mainMenuScene;
     private GameScene     _gameScene;
     private Room2Scene    _room2Scene;
-    private PauseMenu     _pauseMenu;
 
     private KeyboardState _prevKeys;
 
@@ -34,40 +35,41 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
-        _mainMenu   = new MainMenuScene(this, _spriteBatch);
-        _mainMenu.Load();
+        // Load all shared assets first
+        Assets.Load(Content, GraphicsDevice);
 
-        _gameScene  = new GameScene(this, _spriteBatch);
+        // Assign character portraits now that assets are loaded
+        CharacterData.AssignPortraits();
+
+        // Build scenes
+        _mainMenuScene = new MainMenuScene(this, _spriteBatch);
+        _gameScene     = new GameScene(this, _spriteBatch);
+        _room2Scene    = new Room2Scene(this, _spriteBatch);
+
+        _mainMenuScene.Load();
         _gameScene.Load();
-
-        _room2Scene = new Room2Scene(this, _spriteBatch);
         _room2Scene.Load();
 
-        var font      = Content.Load<SpriteFont>("Fonts/MenuFont");
-        var titleFont = Content.Load<SpriteFont>("Fonts/TitleFont");
-        var pixel     = new Texture2D(GraphicsDevice, 1, 1);
-        pixel.SetData(new[] { Color.White });
+        // Pause menu is a special IScene wrapper
+        _pauseMenu = new PauseMenu(this, _spriteBatch);
+        _pauseMenu.Load();
 
-        _pauseMenu = new PauseMenu(this, _spriteBatch, font, titleFont, pixel);
+        _scenes = new SceneManager(_pauseMenu);
+        _scenes.ChangeTo(_mainMenuScene);
     }
 
     protected override void Update(GameTime gameTime)
     {
         var keys = Keyboard.GetState();
 
-        if ((_currentScene == Scene.Game || _currentScene == Scene.Room2) &&
-            keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape))
+        // Pause shortcut — intercept before routing to current scene
+        bool inGame = _scenes.Current is GameScene or Room2Scene;
+        if (inGame && keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape))
         {
-            PauseFrom(_currentScene);
+            _scenes.Pause();
         }
 
-        switch (_currentScene)
-        {
-            case Scene.MainMenu: _mainMenu.Update(gameTime);   break;
-            case Scene.Game:     _gameScene.Update(gameTime);  break;
-            case Scene.Room2:    _room2Scene.Update(gameTime); break;
-            case Scene.Paused:   _pauseMenu.Update(gameTime);  break;
-        }
+        _scenes.Update(gameTime);
 
         _prevKeys = keys;
         base.Update(gameTime);
@@ -77,43 +79,24 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         GraphicsDevice.Clear(new Color(10, 10, 18));
 
-        switch (_currentScene)
+        // If paused, draw the underlying scene first, then the overlay
+        if (_scenes.Current is PauseMenu)
         {
-            case Scene.MainMenu:
-                _mainMenu.Draw(gameTime);
-                break;
-            case Scene.Game:
-                _gameScene.Draw(gameTime);
-                break;
-            case Scene.Room2:
-                _room2Scene.Draw(gameTime);
-                break;
-            case Scene.Paused:
-                // Draw whatever was behind the pause menu
-                if (_prePauseScene == Scene.Room2)
-                    _room2Scene.Draw(gameTime);
-                else
-                    _gameScene.Draw(gameTime);
-                _pauseMenu.Draw(gameTime);
-                break;
+            _scenes.DrawPrePause(gameTime);
         }
+
+        _scenes.Draw(gameTime);
 
         base.Draw(gameTime);
     }
 
-    public void ChangeScene(Scene scene)
-    {
-        _currentScene = scene;
-        IsMouseVisible = scene == Scene.MainMenu;
+    // -----------------------------------------------------------------------
+    // Public navigation API — called by scenes and the pause menu
+    // -----------------------------------------------------------------------
 
-        if (scene == Scene.Room2)
-            _room2Scene.OnEnter();
-    }
-
-    public void PauseFrom(Scene origin)
-    {
-        _prePauseScene = origin;
-        _pauseMenu.OnOpen();
-        _currentScene  = Scene.Paused;
-    }
+    public void GoToMainMenu()   => _scenes.ChangeTo(_mainMenuScene);
+    public void GoToGame()       => _scenes.ChangeTo(_gameScene);
+    public void GoToRoom2()      => _scenes.ChangeTo(_room2Scene);
+    public void Resume()         => _scenes.Resume();
+    public void Pause()          => _scenes.Pause();
 }
