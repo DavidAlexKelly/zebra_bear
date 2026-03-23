@@ -1,6 +1,7 @@
 //======== Scenes/InteractionData.cs ========
 using System;
 using System.Collections.Generic;
+using ZebraBear.Core;
 
 namespace ZebraBear.Scenes;
 
@@ -63,20 +64,15 @@ public class InteractionChoice
 /// </summary>
 public static class InteractionStore
 {
-    public static readonly List<InteractionDef> Interactions = new();
-
-    public static InteractionDef FindById(string id)
-    {
-        if (string.IsNullOrEmpty(id)) return null;
-        return Interactions.Find(i => i.Id == id);
-    }
-
-    public static InteractionDef FindByName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return null;
-        return Interactions.Find(i =>
-            i.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public static void Clear() => Interactions.Clear();
+    public static List<InteractionDef> Interactions =>
+        GameContext.Instance.Interactions;
+ 
+    public static InteractionDef FindById(string id) =>
+        GameContext.Instance.FindInteractionById(id);
+ 
+    public static InteractionDef FindByName(string name) =>
+        GameContext.Instance.FindInteractionByName(name);
+ 
+    public static void Clear() =>
+        GameContext.Instance.Interactions.Clear();
 }

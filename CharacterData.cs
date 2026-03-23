@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework.Graphics;
 using System.Collections.Generic;
+using ZebraBear.Core;
 
 namespace ZebraBear;
 
@@ -10,44 +11,29 @@ public class CharacterProfile
 {
     public string    Id;
     public string    Name;
-
-    public string PortraitPath = "";
+    public string    PortraitPath = "";
     public string    Title;
     public string[]  Bio;
     public Texture2D Portrait;
     public bool      Met;
-    
 }
 
 /// <summary>
-/// Central registry of all characters in the game.
+/// SHIM — delegates to GameContext.Instance.
 ///
-/// Characters are now loaded from Data/characters.json by GameLoader.
-/// Do not add entries here directly — edit the JSON file instead.
-///
-/// The Characters list starts empty; GameLoader.LoadCharacters() fills it.
-/// PauseMenu reads from here automatically.
+/// Kept for source compatibility during the GameContext migration.
+/// Once all call-sites reference GameContext directly, delete this class.
 /// </summary>
 public static class CharacterData
 {
-    public static int SelectedIndex = 0;
-
-    /// <summary>
-    /// Populated by GameLoader.LoadCharacters().
-    /// Do not add to this list manually.
-    /// </summary>
-    public static readonly List<CharacterProfile> Characters = new();
-
-    /// <summary>
-    /// Call when the player first interacts with a character.
-    /// Reveals them in the Characters tab.
-    /// </summary>
-    public static void SetMet(string characterId)
+    public static int SelectedIndex
     {
-        var c = Characters.Find(c => c.Id == characterId);
-        if (c != null) c.Met = true;
+        get => GameContext.Instance.SelectedCharacterIndex;
+        set => GameContext.Instance.SelectedCharacterIndex = value;
     }
 
-    // AssignPortraits() is no longer needed — GameLoader.LoadCharacters()
-    // handles portrait loading directly from the JSON "portrait" field.
+    public static List<CharacterProfile> Characters => GameContext.Instance.Characters;
+
+    public static void SetMet(string characterId) =>
+        GameContext.Instance.SetMet(characterId);
 }

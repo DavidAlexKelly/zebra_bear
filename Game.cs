@@ -38,9 +38,16 @@ public class Game : Microsoft.Xna.Framework.Game, IGameHost
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
+        // --- Initialise context objects before anything else reads them ---
+        // GameContext.Instance is read by the legacy shims (MapData,
+        // NavigationBus, etc.) until each call-site is migrated.
+        GameContext.Instance = new GameContext();
+
         ZebraBearEntities.Content = Content;
         ZebraBearEntities.Register();
         ModelExporter.ExportAll();
+
+        // Assets.Load sets AssetCache.Instance (read by the Assets shim).
         Assets.Load(Content, GraphicsDevice);
 
         GameLoader.LoadCharacters(Content);

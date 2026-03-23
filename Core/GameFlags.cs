@@ -1,24 +1,17 @@
-using System.Collections.Generic;
+using ZebraBear.Core;
 
 namespace ZebraBear.Core;
 
 /// <summary>
-/// Lightweight runtime flag store.
+/// SHIM — delegates to GameContext.Instance.
 ///
-/// Flags are plain strings. JSON interactions can set them via
-/// { "type": "setFlag", "flag": "foundNote" } and dialogue nodes
-/// can gate lines behind them.
-///
-/// Flags are not persisted between sessions yet — that's handled
-/// by the save/load system when implemented.
+/// Kept for source compatibility during the GameContext migration.
+/// Once all call-sites reference GameContext directly, delete this class.
 /// </summary>
 public static class GameFlags
 {
-    private static readonly HashSet<string> _flags =
-        new(System.StringComparer.OrdinalIgnoreCase);
-
-    public static void  Set(string flag)          => _flags.Add(flag);
-    public static void  Clear(string flag)        => _flags.Remove(flag);
-    public static bool  IsSet(string flag)        => _flags.Contains(flag);
-    public static void  Reset()                   => _flags.Clear();
+    public static void Set(string flag)        => GameContext.Instance.SetFlag(flag);
+    public static void Clear(string flag)      => GameContext.Instance.ClearFlag(flag);
+    public static bool IsSet(string flag)      => GameContext.Instance.IsFlagSet(flag);
+    public static void Reset()                 => GameContext.Instance.ResetFlags();
 }

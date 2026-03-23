@@ -1,7 +1,10 @@
 using Microsoft.Xna.Framework;
 using System.Collections.Generic;
+using ZebraBear.Core;
 
 namespace ZebraBear;
+
+// MapRoom and MapConnection are plain data — no changes needed.
 
 public class MapRoom
 {
@@ -16,9 +19,6 @@ public class MapRoom
     /// Values (case-insensitive):
     ///   "box"   — standard rectangular room (default)
     ///   "plus"  — plus-shaped hub room (PlusRoom3D geometry)
-    ///
-    /// Set in map.json:
-    ///   { "id": "Hub", "sceneType": "plus", ... }
     /// </summary>
     public string SceneType = "box";
 }
@@ -30,19 +30,22 @@ public class MapConnection
 }
 
 /// <summary>
-/// Holds all map data for the game.
-/// Populated by GameLoader.LoadMap() from Data/map.json.
+/// SHIM — delegates to GameContext.Instance.
+///
+/// Kept for source compatibility during the GameContext migration.
+/// Once all call-sites reference GameContext directly, delete this class.
 /// </summary>
 public static class MapData
 {
-    public static string CurrentRoomId = "MainHall";
-
-    public static readonly List<MapRoom>       Rooms       = new();
-    public static readonly List<MapConnection> Connections = new();
-
-    public static void SetDiscovered(string roomId)
+    public static string CurrentRoomId
     {
-        var room = Rooms.Find(r => r.Id == roomId);
-        if (room != null) room.Discovered = true;
+        get => GameContext.Instance.CurrentRoomId;
+        set => GameContext.Instance.CurrentRoomId = value;
     }
+
+    public static List<MapRoom>       Rooms       => GameContext.Instance.Rooms;
+    public static List<MapConnection> Connections => GameContext.Instance.Connections;
+
+    public static void SetDiscovered(string roomId) =>
+        GameContext.Instance.SetDiscovered(roomId);
 }
