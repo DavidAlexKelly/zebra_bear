@@ -1,26 +1,34 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System.Collections.Generic;
 using ZebraBear.Core;
 using ZebraBear.Scenes;
 
 namespace ZebraBear;
 
+/// <summary>
+/// Application entry point and scene router.
+///
+/// Scenes are now fully data-driven: any room in map.json is automatically
+/// available as a navigation target. Adding a new room requires:
+///   1. An entry in Data/map.json  (id, label, position, size, sceneType)
+///   2. An entry in Data/rooms.json (id, colours, entities)
+///   3. Zero C# changes here.
+///
+/// Special-case scenes (MainMenu, PauseMenu) are still constructed directly.
+/// </summary>
 public class Game : Microsoft.Xna.Framework.Game
 {
     private GraphicsDeviceManager _graphics;
     private SpriteBatch           _spriteBatch;
 
-    private SceneManager _scenes;
-    private PauseMenu    _pauseMenu;
-
+    private SceneManager  _scenes;
+    private PauseMenu     _pauseMenu;
     private MainMenuScene _mainMenuScene;
-    private GameScene     _gameScene;       // Main Hall (starting room)
-    private HubScene      _hubScene;        // Plus-shaped connecting room
-    private Room2Scene    _roomNorthScene;
-    private Room2Scene    _roomSouthScene;
-    private Room2Scene    _roomWestScene;
-    private Room2Scene    _roomEastScene;
+
+    // Room scenes are created on demand and cached by room id.
+    private readonly Dictionary<string, IScene> _roomScenes = new();
 
     private KeyboardState _prevKeys;
 
@@ -38,25 +46,34 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
+        // Give entity builders access to the content pipeline (needed for fbx type)
+        ZebraBearEntities.Content = Content;
+
+        // Register all entity types used by this game
+        ZebraBearEntities.Register();
+
+        // Export all MeshBuilder shapes to Data/Models/ as OBJ files.
+        // Safe to leave on permanently — skips files that already exist.
+        ModelExporter.ExportAll();
+
         Assets.Load(Content, GraphicsDevice);
         GameLoader.LoadCharacters(Content);
         GameLoader.LoadMap();
 
-        _mainMenuScene  = new MainMenuScene(this, _spriteBatch);
-        _gameScene      = new GameScene(this, _spriteBatch);
-        _hubScene       = new HubScene(this, _spriteBatch);
-        _roomNorthScene = new Room2Scene(this, _spriteBatch, "RoomNorth");
-        _roomSouthScene = new Room2Scene(this, _spriteBatch, "RoomSouth");
-        _roomWestScene  = new Room2Scene(this, _spriteBatch, "RoomWest");
-        _roomEastScene  = new Room2Scene(this, _spriteBatch, "RoomEast");
+        // Build room scenes from map data — no hard-coded room list
+        foreach (var mapRoom in MapData.Rooms)
+        {
+            var sceneType = mapRoom.SceneType == "plus"
+                ? RoomSceneType.Plus
+                : RoomSceneType.Box;
 
+            var scene = new RoomScene(this, _spriteBatch, mapRoom.Id, sceneType);
+            scene.Load();
+            _roomScenes[mapRoom.Id] = scene;
+        }
+
+        _mainMenuScene = new MainMenuScene(this, _spriteBatch);
         _mainMenuScene.Load();
-        _gameScene.Load();
-        _hubScene.Load();
-        _roomNorthScene.Load();
-        _roomSouthScene.Load();
-        _roomWestScene.Load();
-        _roomEastScene.Load();
 
         _pauseMenu = new PauseMenu(this, _spriteBatch);
         _pauseMenu.Load();
@@ -69,9 +86,7 @@ public class Game : Microsoft.Xna.Framework.Game
     {
         var keys = Keyboard.GetState();
 
-        bool inGame = _scenes.Current is GameScene
-                   or HubScene
-                   or Room2Scene;
+        bool inGame = _scenes.Current is RoomScene;
 
         if (inGame && keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape))
             _scenes.Pause();
@@ -87,19 +102,20 @@ public class Game : Microsoft.Xna.Framework.Game
 
     private void HandleNavigation(string destination)
     {
-        switch (destination)
+        if (destination == "MainMenu")
         {
-            case "MainHall":  _scenes.ChangeTo(_gameScene);       break;
-            case "Hub":       _scenes.ChangeTo(_hubScene);        break;
-            case "RoomNorth": _scenes.ChangeTo(_roomNorthScene);  break;
-            case "RoomSouth": _scenes.ChangeTo(_roomSouthScene);  break;
-            case "RoomWest":  _scenes.ChangeTo(_roomWestScene);   break;
-            case "RoomEast":  _scenes.ChangeTo(_roomEastScene);   break;
-            case "MainMenu":  _scenes.ChangeTo(_mainMenuScene);   break;
-            default:
-                System.Console.WriteLine($"[Game] Unknown destination: '{destination}'");
-                break;
+            _scenes.ChangeTo(_mainMenuScene);
+            return;
         }
+
+        if (_roomScenes.TryGetValue(destination, out var scene))
+        {
+            _scenes.ChangeTo(scene);
+            return;
+        }
+
+        System.Console.WriteLine($"[Game] Unknown destination: '{destination}'. " +
+            $"Add it to map.json and rooms.json.");
     }
 
     protected override void Draw(GameTime gameTime)
@@ -112,12 +128,10 @@ public class Game : Microsoft.Xna.Framework.Game
     }
 
     // -----------------------------------------------------------------------
-    // Navigation API (used by pause menu, scenes)
+    // Navigation API  (kept for code that calls these directly, e.g. PauseMenu)
     // -----------------------------------------------------------------------
 
     public void GoToMainMenu() => _scenes.ChangeTo(_mainMenuScene);
-    public void GoToGame()     => _scenes.ChangeTo(_gameScene);
-    public void GoToHub()      => _scenes.ChangeTo(_hubScene);
     public void Resume()       => _scenes.Resume();
     public void Pause()        => _scenes.Pause();
 }

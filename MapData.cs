@@ -10,6 +10,17 @@ public class MapRoom
     public Vector2 Position;
     public Vector2 Size;
     public bool    Discovered;
+
+    /// <summary>
+    /// Controls which scene geometry is used for this room.
+    /// Values (case-insensitive):
+    ///   "box"   — standard rectangular room (default)
+    ///   "plus"  — plus-shaped hub room (PlusRoom3D geometry)
+    ///
+    /// Set in map.json:
+    ///   { "id": "Hub", "sceneType": "plus", ... }
+    /// </summary>
+    public string SceneType = "box";
 }
 
 public class MapConnection
@@ -20,27 +31,15 @@ public class MapConnection
 
 /// <summary>
 /// Holds all map data for the game.
-///
-/// Rooms, connections, and the start room are now loaded from
-/// Data/map.json by GameLoader.LoadMap(). Do not add entries here
-/// directly — edit the JSON file instead.
-///
-/// Runtime helpers (SetDiscovered, CurrentRoomId) remain here.
+/// Populated by GameLoader.LoadMap() from Data/map.json.
 /// </summary>
 public static class MapData
 {
     public static string CurrentRoomId = "MainHall";
 
-    /// <summary>Populated by GameLoader.LoadMap().</summary>
     public static readonly List<MapRoom>       Rooms       = new();
-
-    /// <summary>Populated by GameLoader.LoadMap().</summary>
     public static readonly List<MapConnection> Connections = new();
 
-    /// <summary>
-    /// Mark a room as discovered (e.g. when the player enters it).
-    /// Reveals it on the pause-menu map.
-    /// </summary>
     public static void SetDiscovered(string roomId)
     {
         var room = Rooms.Find(r => r.Id == roomId);

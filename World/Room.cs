@@ -114,7 +114,7 @@ public class Room
         foreach (var e in _entities)
         {
             if (string.IsNullOrEmpty(e.Name)) continue;
-            if (e.Raycast(ray, out float dist) && dist < closest && dist < maxDistance)
+            if (e.Intersects(ray, out float dist) && dist < closest && dist < maxDistance)
             {
                 closest   = dist;
                 _targeted = e;

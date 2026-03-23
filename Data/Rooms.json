@@ -5,94 +5,50 @@
       "label": "Main Hall",
       "wallColor":  [22, 20, 38],
       "floorColor": [18, 16, 28],
-      "ceilColor":  [12, 12, 22],
+      "ceilColor":  [14, 12, 20],
       "entities": [
-        {
-          "type": "billboard",
-          "name": "Kei",
-          "position": [-4.0, -0.75, -10.0],
-          "width": 2.2,
-          "height": 4.5,
-          "tint": [180, 160, 220],
-          "isCharacter": true,
-          "sprite": null,
-          "dialogue": [
-            "Oh? You're actually talking to me?",
-            "I didn't think anyone would bother...",
-            "Well. Since you're here. My name is Kei.",
-            "Try not to die before we get off this island."
-          ]
-        },
-        {
-          "type": "billboard",
-          "name": "Haru",
-          "position": [5.0, -1.0, -11.0],
-          "width": 2.0,
-          "height": 4.0,
-          "tint": [160, 200, 180],
-          "isCharacter": true,
-          "sprite": null,
-          "dialogue": [
-            "Don't look at me.",
-            "I'm not interested in talking."
-          ]
-        },
-        {
-          "type": "orientedBox",
-          "name": "",
-          "centre": [13.9, 0.8, -4.0],
-          "width": 2.6,
-          "height": 3.6,
-          "normal": "east",
-          "tint": [40, 30, 22],
-          "depth": 0.15,
-          "solid": false,
-          "dialogue": null
-        },
         {
           "type": "orientedBox",
           "name": "Locked Door",
-          "centre": [13.9, 0.6, -4.0],
-          "width": 2.2,
-          "height": 3.2,
-          "normal": "east",
-          "tint": [90, 65, 45],
+          "centre": [0.0, -1.3, -12.8],
+          "width": 3.5,
+          "height": 3.8,
           "depth": 0.25,
-          "solid": true,
-          "dialogue": [
-            "The door leads to the main corridor.",
-            "Go through?"
-          ],
-          "onInteract": {
-            "type": "navigate",
-            "target": "Hub",
-            "choiceIndex": 0
+          "normal": "north",
+          "tint": [90, 65, 45],
+          "dialogueTree": {
+            "id": "door_root",
+            "lines": [
+              "A heavy wooden door.",
+              "It leads to the main corridor."
+            ],
+            "choices": [
+              {
+                "label": "Go through",
+                "onInteract": { "type": "navigate", "target": "Hub", "choiceIndex": 0 }
+              },
+              {
+                "label": "Stay here",
+                "next": {
+                  "id": "stay",
+                  "lines": ["Maybe later."]
+                }
+              }
+            ]
           }
         },
         {
           "type": "orientedBox",
-          "name": "",
-          "centre": [-8.0, 1.3, -13.9],
-          "width": 2.8,
-          "height": 2.0,
-          "normal": "north",
-          "tint": [35, 28, 18],
-          "depth": 0.1,
-          "solid": false,
-          "dialogue": null
-        },
-        {
-          "type": "orientedBox",
           "name": "Notice Board",
-          "centre": [-8.0, 1.3, -13.9],
-          "width": 2.4,
-          "height": 1.6,
-          "normal": "north",
-          "tint": [160, 130, 85],
-          "depth": 0.18,
-          "solid": true,
+          "centre": [8.5, -0.5, 0.0],
+          "width": 3.0,
+          "height": 2.2,
+          "depth": 0.12,
+          "normal": "west",
+          "tint": [130, 110, 80],
+          "solid": false,
           "dialogue": [
-            "A class schedule pinned up neatly.",
+            "A notice board covered in paper.",
             "Someone has drawn a small bear in the corner.",
             "It's smiling."
           ]
@@ -109,6 +65,36 @@
             "A plain wooden table.",
             "Nothing on it. Someone cleared it recently."
           ]
+        },
+        {
+          "type": "chair",
+          "name": "Chair",
+          "position": [2.5, -3.0, 0.0],
+          "width": 0.85,
+          "depth": 0.85,
+          "height": 0.9,
+          "tint": [100, 70, 45],
+          "dialogue": ["A plain wooden chair."]
+        },
+        {
+          "type": "shelf",
+          "name": "Shelf",
+          "centre": [-8.5, 0.5, 0.0],
+          "width": 2.5,
+          "depth": 0.35,
+          "normal": "east",
+          "tint": [120, 95, 65],
+          "dialogue": ["A wall shelf. Nothing useful on it."]
+        },
+        {
+          "type": "pillar",
+          "name": "Pillar",
+          "position": [5.0, -3.0, 5.0],
+          "width": 0.6,
+          "depth": 0.6,
+          "height": 6.0,
+          "tint": [70, 68, 90],
+          "dialogue": ["A thick stone pillar."]
         }
       ]
     },
@@ -119,7 +105,113 @@
       "wallColor":  [20, 18, 32],
       "floorColor": [15, 14, 24],
       "ceilColor":  [10, 10, 18],
-      "entities": []
+      "entities": [
+        {
+          "type": "orientedBox",
+          "name": "North Door",
+          "centre": [0.0, -1.3, -15.85],
+          "width": 3.8,
+          "height": 3.2,
+          "depth": 0.22,
+          "normal": "north",
+          "tint": [90, 65, 45],
+          "dialogueTree": {
+            "id": "north_door",
+            "lines": ["A heavy door. Beyond it lies the north wing."],
+            "choices": [
+              {
+                "label": "Go through",
+                "onInteract": { "type": "navigate", "target": "RoomNorth", "choiceIndex": 0 }
+              },
+              { "label": "Go back" }
+            ]
+          }
+        },
+        {
+          "type": "orientedBox",
+          "name": "South Door",
+          "centre": [0.0, -1.3, 15.85],
+          "width": 3.8,
+          "height": 3.2,
+          "depth": 0.22,
+          "normal": "south",
+          "tint": [90, 65, 45],
+          "dialogueTree": {
+            "id": "south_door",
+            "lines": ["A heavy door. Beyond it lies the south wing."],
+            "choices": [
+              {
+                "label": "Go through",
+                "onInteract": { "type": "navigate", "target": "RoomSouth", "choiceIndex": 0 }
+              },
+              { "label": "Go back" }
+            ]
+          }
+        },
+        {
+          "type": "orientedBox",
+          "name": "West Door",
+          "centre": [-15.85, -1.3, 0.0],
+          "width": 3.8,
+          "height": 3.2,
+          "depth": 0.22,
+          "normal": "west",
+          "tint": [90, 65, 45],
+          "dialogueTree": {
+            "id": "west_door",
+            "lines": ["A heavy door. Beyond it lies the west wing."],
+            "choices": [
+              {
+                "label": "Go through",
+                "onInteract": { "type": "navigate", "target": "RoomWest", "choiceIndex": 0 }
+              },
+              { "label": "Go back" }
+            ]
+          }
+        },
+        {
+          "type": "orientedBox",
+          "name": "East Door",
+          "centre": [15.85, -1.3, 0.0],
+          "width": 3.8,
+          "height": 3.2,
+          "depth": 0.22,
+          "normal": "east",
+          "tint": [90, 65, 45],
+          "dialogueTree": {
+            "id": "east_door",
+            "lines": ["A heavy door. Beyond it lies the east wing."],
+            "choices": [
+              {
+                "label": "Go through",
+                "onInteract": { "type": "navigate", "target": "RoomEast", "choiceIndex": 0 }
+              },
+              { "label": "Go back" }
+            ]
+          }
+        },
+        {
+          "type": "orientedBox",
+          "name": "Main Hall Door",
+          "centre": [-15.85, -1.3, 0.0],
+          "width": 3.8,
+          "height": 3.2,
+          "depth": 0.22,
+          "normal": "east",
+          "tint": [70, 50, 35],
+          "dialogueTree": {
+            "id": "back_door",
+            "lines": ["The door back to the Main Hall."],
+            "choices": [
+              {
+                "label": "Return",
+                "onInteract": { "type": "navigate", "target": "MainHall", "choiceIndex": 0 }
+              },
+              { "label": "Stay" }
+            ]
+          }
+        }
+      ]
     },
 
     {
@@ -128,7 +220,29 @@
       "wallColor":  [18, 24, 30],
       "floorColor": [14, 18, 22],
       "ceilColor":  [10, 12, 16],
-      "entities": []
+      "entities": [
+        {
+          "type": "orientedBox",
+          "name": "Exit Door",
+          "centre": [0.0, -1.3, 12.8],
+          "width": 3.5,
+          "height": 3.8,
+          "depth": 0.25,
+          "normal": "south",
+          "tint": [70, 50, 35],
+          "dialogueTree": {
+            "id": "exit",
+            "lines": ["The door back to the main corridor."],
+            "choices": [
+              {
+                "label": "Return",
+                "onInteract": { "type": "navigate", "target": "Hub", "choiceIndex": 0 }
+              },
+              { "label": "Stay" }
+            ]
+          }
+        }
+      ]
     },
 
     {
@@ -137,7 +251,29 @@
       "wallColor":  [28, 18, 20],
       "floorColor": [20, 14, 16],
       "ceilColor":  [14, 10, 12],
-      "entities": []
+      "entities": [
+        {
+          "type": "orientedBox",
+          "name": "Exit Door",
+          "centre": [0.0, -1.3, -12.8],
+          "width": 3.5,
+          "height": 3.8,
+          "depth": 0.25,
+          "normal": "north",
+          "tint": [70, 50, 35],
+          "dialogueTree": {
+            "id": "exit",
+            "lines": ["The door back to the main corridor."],
+            "choices": [
+              {
+                "label": "Return",
+                "onInteract": { "type": "navigate", "target": "Hub", "choiceIndex": 0 }
+              },
+              { "label": "Stay" }
+            ]
+          }
+        }
+      ]
     },
 
     {
@@ -146,7 +282,29 @@
       "wallColor":  [18, 26, 20],
       "floorColor": [14, 18, 15],
       "ceilColor":  [10, 14, 11],
-      "entities": []
+      "entities": [
+        {
+          "type": "orientedBox",
+          "name": "Exit Door",
+          "centre": [12.8, -1.3, 0.0],
+          "width": 3.5,
+          "height": 3.8,
+          "depth": 0.25,
+          "normal": "east",
+          "tint": [70, 50, 35],
+          "dialogueTree": {
+            "id": "exit",
+            "lines": ["The door back to the main corridor."],
+            "choices": [
+              {
+                "label": "Return",
+                "onInteract": { "type": "navigate", "target": "Hub", "choiceIndex": 0 }
+              },
+              { "label": "Stay" }
+            ]
+          }
+        }
+      ]
     },
 
     {
@@ -155,7 +313,29 @@
       "wallColor":  [26, 22, 16],
       "floorColor": [18, 16, 12],
       "ceilColor":  [14, 12, 10],
-      "entities": []
+      "entities": [
+        {
+          "type": "orientedBox",
+          "name": "Exit Door",
+          "centre": [-12.8, -1.3, 0.0],
+          "width": 3.5,
+          "height": 3.8,
+          "depth": 0.25,
+          "normal": "west",
+          "tint": [70, 50, 35],
+          "dialogueTree": {
+            "id": "exit",
+            "lines": ["The door back to the main corridor."],
+            "choices": [
+              {
+                "label": "Return",
+                "onInteract": { "type": "navigate", "target": "Hub", "choiceIndex": 0 }
+              },
+              { "label": "Stay" }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

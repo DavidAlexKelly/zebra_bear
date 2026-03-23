@@ -7,12 +7,15 @@ namespace ZebraBear.Entities;
 /// <summary>
 /// Static factory for building vertex/index geometry.
 /// Returns raw arrays ready to be owned by a MeshEntity.
+///
 /// Add new shape methods here — don't create new entity subclasses for shapes.
+/// Every public method returns (VertexPositionColor[], short[]) so it can be
+/// passed directly to a MeshEntity constructor.
 /// </summary>
 public static class MeshBuilder
 {
     // -----------------------------------------------------------------------
-    // Common normals — use these instead of WallFacing
+    // Common normals
     // -----------------------------------------------------------------------
 
     /// <summary>Object faces toward +Z (protrudes from the back wall).</summary>
@@ -28,10 +31,12 @@ public static class MeshBuilder
     public static readonly Vector3 FaceWest  = Vector3.Right;        // (1, 0, 0)
 
     // -----------------------------------------------------------------------
-    // Shape builders
+    // Box
     // -----------------------------------------------------------------------
 
-    /// <summary>Axis-aligned box from min to max corner.</summary>
+    /// <summary>
+    /// Axis-aligned box from min to max corner.
+    /// </summary>
     public static (VertexPositionColor[] verts, short[] idx) Box(
         Vector3 min, Vector3 max,
         Color top, Color bottom, Color side)
@@ -64,6 +69,10 @@ public static class MeshBuilder
 
         return (verts.ToArray(), idx.ToArray());
     }
+
+    // -----------------------------------------------------------------------
+    // Table
+    // -----------------------------------------------------------------------
 
     /// <summary>
     /// Table: a top slab and four legs.
@@ -117,17 +126,134 @@ public static class MeshBuilder
         return (verts.ToArray(), idx.ToArray());
     }
 
+    // -----------------------------------------------------------------------
+    // Chair
+    // -----------------------------------------------------------------------
+
     /// <summary>
-    /// Oriented box — used for wall-mounted objects, angled props, anything
-    /// that isn't axis-aligned. Pass a world-space normal indicating which
-    /// direction the front face points.
-    ///
-    /// Use the FaceNorth/South/East/West constants for standard wall placements,
-    /// or supply any normalised Vector3 for arbitrary orientations.
+    /// Chair: seat slab, four legs, optional backrest panel.
+    /// pos = centre of base at floor level.
+    /// </summary>
+    public static (VertexPositionColor[] verts, short[] idx) Chair(
+        Vector3 pos, float w, float d, float h, Color tint, bool backrest = true)
+    {
+        var verts = new List<VertexPositionColor>();
+        var idx   = new List<short>();
+
+        float hw      = w / 2f;
+        float hd      = d / 2f;
+        float seatTop = pos.Y + h;
+        float seatThk = 0.1f;
+        float legW    = 0.08f;
+        float legInset = 0.1f;
+
+        Color topColor    = tint;
+        Color sideColor   = Darken(tint, 0.70f);
+        Color bottomColor = Darken(tint, 0.50f);
+        Color legColor    = Darken(tint, 0.60f);
+        Color legSide     = Darken(tint, 0.45f);
+
+        // Seat slab
+        Merge(verts, idx, Box(
+            new Vector3(pos.X - hw, seatTop - seatThk, pos.Z - hd),
+            new Vector3(pos.X + hw, seatTop,            pos.Z + hd),
+            topColor, bottomColor, sideColor));
+
+        // Four legs
+        Vector3[] legCentres =
+        {
+            new Vector3(pos.X - hw + legInset, 0, pos.Z - hd + legInset),
+            new Vector3(pos.X + hw - legInset, 0, pos.Z - hd + legInset),
+            new Vector3(pos.X - hw + legInset, 0, pos.Z + hd - legInset),
+            new Vector3(pos.X + hw - legInset, 0, pos.Z + hd - legInset),
+        };
+
+        foreach (var lc in legCentres)
+        {
+            Merge(verts, idx, Box(
+                new Vector3(lc.X - legW / 2f, pos.Y,              lc.Z - legW / 2f),
+                new Vector3(lc.X + legW / 2f, seatTop - seatThk,  lc.Z + legW / 2f),
+                legColor, bottomColor, legSide));
+        }
+
+        // Backrest panel
+        if (backrest)
+        {
+            float backH   = 0.55f;
+            float backThk = 0.07f;
+            float backZ   = pos.Z - hd + backThk / 2f;
+
+            Merge(verts, idx, Box(
+                new Vector3(pos.X - hw, seatTop,          backZ - backThk / 2f),
+                new Vector3(pos.X + hw, seatTop + backH,  backZ + backThk / 2f),
+                Darken(tint, 0.75f), bottomColor, Darken(tint, 0.55f)));
+        }
+
+        return (verts.ToArray(), idx.ToArray());
+    }
+
+    // -----------------------------------------------------------------------
+    // Shelf
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Wall-mounted shelf: a horizontal slab with two side brackets.
+    /// centre = world-space centre of the shelf slab.
+    /// normal = direction the shelf faces (away from the wall it sits on).
+    /// depth  = how far it protrudes from the wall.
+    /// </summary>
+    public static (VertexPositionColor[] verts, short[] idx) Shelf(
+        Vector3 centre, float width, float depth, Vector3 normal, Color tint)
+    {
+        var verts = new List<VertexPositionColor>();
+        var idx   = new List<short>();
+
+        float slabThk    = 0.06f;
+        float brackW     = 0.05f;
+        float brackH     = depth * 0.85f;
+        float hw         = width / 2f;
+        Color brackColor = Darken(tint, 0.65f);
+
+        // Slab
+        Merge(verts, idx, OrientedBox(centre, width, slabThk, normal, tint, depth));
+
+        // Derive right vector so we can place brackets at each end
+        var n     = Vector3.Normalize(normal);
+        var up    = Vector3.Up;
+        var right = Vector3.Normalize(Vector3.Cross(up, n));
+        if (right.LengthSquared() < 0.001f)
+        {
+            up    = Vector3.Forward;
+            right = Vector3.Normalize(Vector3.Cross(up, n));
+        }
+
+        float inset = 0.08f;
+        var bracketOffset = Vector3.Up * (brackH / 2f + slabThk / 2f);
+
+        Vector3[] bCentres =
+        {
+            centre - right * (hw - inset) - bracketOffset,
+            centre + right * (hw - inset) - bracketOffset,
+        };
+
+        foreach (var bc in bCentres)
+            Merge(verts, idx, OrientedBox(bc, brackW, brackH, n, brackColor, depth * 0.6f));
+
+        return (verts.ToArray(), idx.ToArray());
+    }
+
+    // -----------------------------------------------------------------------
+    // OrientedBox
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Box facing a given world-space normal direction — used for wall-mounted
+    /// objects (doors, notice boards, windows, etc.) and anything that isn't
+    /// axis-aligned.
     ///
     /// centre = world-space centre of the object.
     /// normal = direction the front face points (away from the wall).
-    /// depth  = total thickness of the object along the normal axis.
+    /// depth  = total thickness along the normal axis.
     /// </summary>
     public static (VertexPositionColor[] verts, short[] idx) OrientedBox(
         Vector3 centre, float w, float h, Vector3 normal,
@@ -138,11 +264,9 @@ public static class MeshBuilder
 
         normal = Vector3.Normalize(normal);
 
-        // Derive right and up from the normal so the box is always upright
         var up    = Vector3.Up;
         var right = Vector3.Normalize(Vector3.Cross(up, normal));
 
-        // If normal is straight up or down, right would be degenerate — fall back
         if (right.LengthSquared() < 0.001f)
         {
             up    = Vector3.Forward;
@@ -218,12 +342,16 @@ public static class MeshBuilder
 
         var min = corners[0];
         var max = corners[0];
-        foreach (var p in corners) { min = Vector3.Min(min, p); max = Vector3.Max(max, p); }
+        foreach (var p in corners)
+        {
+            min = Vector3.Min(min, p);
+            max = Vector3.Max(max, p);
+        }
         return new BoundingBox(min, max);
     }
 
     // -----------------------------------------------------------------------
-    // Internal helpers
+    // Helpers
     // -----------------------------------------------------------------------
 
     internal static void AddQuad(

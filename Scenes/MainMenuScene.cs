@@ -59,7 +59,7 @@ public class MainMenuScene : IScene
         {
             switch (_selectedIndex)
             {
-                case 0: _game.GoToGame(); break;
+                case 0: NavigationBus.RequestNavigate(MapData.CurrentRoomId); break;
                 case 1: /* load logic */ break;
                 case 2: _game.Exit();    break;
             }

@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
+using ZebraBear.Core;
 
 namespace ZebraBear.Entities;
 
@@ -8,12 +9,16 @@ namespace ZebraBear.Entities;
 /// Base class for all interactive world objects.
 ///
 /// Owns:
-///   - Identity (Name, Dialogue)
-///   - Interaction callback (OnInteract)
+///   - Identity (Name, Dialogue / DialogueTree)
+///   - Interaction callback (OnInteract) — for simple cases only
 ///   - Raycasting via BoundingBox
 ///
-/// Rendering is delegated to subclasses — Entity itself knows nothing
-/// about how it looks.
+/// For branching dialogue, set DialogueTree instead of Dialogue.
+/// The scene's StartDialogue() method checks DialogueTree first.
+/// Legacy flat Dialogue arrays are automatically promoted to a single-node
+/// DialogueTree by GameLoader, so scenes always use DialogueTree at runtime.
+///
+/// Rendering is delegated to subclasses.
 /// </summary>
 public abstract class Entity
 {
@@ -23,30 +28,52 @@ public abstract class Entity
 
     /// <summary>
     /// Display name shown in the HUD interact prompt and dialogue name tag.
-    /// Null or empty = not interactable (decorative only).
+    /// Empty = not interactable (decorative only).
     /// </summary>
     public string Name;
 
-    /// <summary>Lines of dialogue shown when the player interacts.</summary>
+    // -----------------------------------------------------------------------
+    // Dialogue
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Legacy flat dialogue array. Kept for compatibility with code that sets
+    /// it directly. At load time, GameLoader promotes this to a DialogueTree
+    /// automatically so that scenes always use the tree path.
+    /// </summary>
     public string[] Dialogue;
+
+    /// <summary>
+    /// Branching dialogue tree. Set directly (from dialogueTree JSON) or
+    /// promoted from flat Dialogue by GameLoader.
+    /// Scenes should use this field; fall back to Dialogue only as a last resort.
+    /// </summary>
+    public DialogueNode DialogueTree;
 
     // -----------------------------------------------------------------------
     // Interaction
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Optional callback fired when a dialogue choice is confirmed.
-    /// Receives the choice index (0 = Yes / first option, 1 = No / second, etc.).
-    /// Set to null for simple non-branching dialogue.
+    /// Optional callback fired when a top-level dialogue choice is confirmed.
+    /// Receives the choice index (0 = first option, 1 = second, etc.).
+    ///
+    /// For simple binary Yes/No interactions where a dialogue tree is overkill,
+    /// set this directly. For everything else, use DialogueTree with
+    /// onSelectActions on each choice instead.
+    ///
     /// Cleared automatically by DialogueBox after firing.
     /// </summary>
     public Action<int> OnInteract;
 
     /// <summary>
-    /// Convenience: returns true if this entity has a branching choice.
-    /// DialogueBox uses this to decide whether to show the choice UI.
+    /// True when this entity's dialogue will present a choice to the player.
+    /// Derived from the DialogueTree if present, else from OnInteract.
     /// </summary>
-    public bool HasChoice => OnInteract != null;
+    public bool HasChoice =>
+        DialogueTree != null
+            ? !DialogueTree.IsLeaf
+            : OnInteract != null;
 
     // -----------------------------------------------------------------------
     // Collision
@@ -55,7 +82,6 @@ public abstract class Entity
     /// <summary>
     /// When true, the player cannot walk through this entity.
     /// MeshEntity defaults to true. BillboardEntity defaults to false.
-    /// Override per-instance after construction if needed.
     /// </summary>
     public bool Solid = false;
 
@@ -65,34 +91,21 @@ public abstract class Entity
 
     protected BoundingBox _bounds;
 
-    /// <summary>Exposes the bounding box for collision resolution.</summary>
     public BoundingBox Bounds => _bounds;
 
-    /// <summary>
-    /// Returns true if the ray intersects this entity's bounding box.
-    /// distance is set to the hit distance, or float.MaxValue on miss.
-    /// </summary>
-    public bool Raycast(Ray ray, out float distance)
+    public virtual bool Intersects(Ray ray, out float distance)
     {
-        distance = float.MaxValue;
-        var hit  = ray.Intersects(_bounds);
-        if (hit.HasValue)
-        {
-            distance = hit.Value;
-            return true;
-        }
-        return false;
+        var result = ray.Intersects(_bounds);
+        distance = result ?? float.MaxValue;
+        return result.HasValue;
     }
 
     // -----------------------------------------------------------------------
-    // Rendering — implemented by subclasses
+    // Rendering (delegated to subclasses)
     // -----------------------------------------------------------------------
 
-    /// <summary>
-    /// Draw this entity using the supplied effect.
-    /// The caller (Room) is responsible for setting effect.View/Projection/World
-    /// before iterating entities.
-    /// targeted = true when the player's crosshair is over this entity.
-    /// </summary>
-    public abstract void Draw(GraphicsDevice gd, BasicEffect effect, bool targeted);
+    public abstract void Draw(
+        Microsoft.Xna.Framework.Graphics.GraphicsDevice gd,
+        BasicEffect fx,
+        bool targeted);
 }

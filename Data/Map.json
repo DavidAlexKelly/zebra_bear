@@ -4,6 +4,7 @@
     {
       "id":         "MainHall",
       "label":      "Main Hall",
+      "sceneType":  "box",
       "position":   [0.08, 0.40],
       "size":       [0.18, 0.12],
       "discovered": true
@@ -11,6 +12,7 @@
     {
       "id":         "Hub",
       "label":      "Main Corridor",
+      "sceneType":  "plus",
       "position":   [0.38, 0.40],
       "size":       [0.22, 0.12],
       "discovered": false
@@ -18,6 +20,7 @@
     {
       "id":         "RoomNorth",
       "label":      "North Wing",
+      "sceneType":  "box",
       "position":   [0.44, 0.18],
       "size":       [0.18, 0.12],
       "discovered": false
@@ -25,6 +28,7 @@
     {
       "id":         "RoomSouth",
       "label":      "South Wing",
+      "sceneType":  "box",
       "position":   [0.44, 0.64],
       "size":       [0.18, 0.12],
       "discovered": false
@@ -32,6 +36,7 @@
     {
       "id":         "RoomWest",
       "label":      "West Wing",
+      "sceneType":  "box",
       "position":   [0.12, 0.40],
       "size":       [0.18, 0.12],
       "discovered": false
@@ -39,6 +44,7 @@
     {
       "id":         "RoomEast",
       "label":      "East Wing",
+      "sceneType":  "box",
       "position":   [0.70, 0.40],
       "size":       [0.18, 0.12],
       "discovered": false
